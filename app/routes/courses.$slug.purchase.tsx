@@ -38,6 +38,7 @@ import { formatDuration, formatPrice } from "~/lib/utils";
 import { resolveCountry } from "~/lib/country.server";
 import { calculatePppPrice, getCountryTierInfo, COUNTRIES } from "~/lib/ppp";
 import { parseFormData, parseParams } from "~/lib/validation";
+import { isActiveEnrollment } from "~/lib/refunds.server";
 
 function getCourseBySlug(slug: string) {
   return db.select().from(courses).where(eq(courses.slug, slug)).get();
@@ -123,7 +124,11 @@ function findEnrollment(userId: number, courseId: number) {
     .select()
     .from(enrollments)
     .where(
-      and(eq(enrollments.userId, userId), eq(enrollments.courseId, courseId))
+      and(
+        eq(enrollments.userId, userId),
+        eq(enrollments.courseId, courseId),
+        isActiveEnrollment
+      )
     )
     .get();
 }
@@ -136,7 +141,7 @@ function getEnrollmentCountForCourse(courseId: number) {
   const result = db
     .select({ count: sql<number>`count(*)` })
     .from(enrollments)
-    .where(eq(enrollments.courseId, courseId))
+    .where(and(eq(enrollments.courseId, courseId), isActiveEnrollment))
     .get();
 
   return result?.count ?? 0;

@@ -1,9 +1,10 @@
-import { Link } from "react-router";
+import { Link, useSearchParams } from "react-router";
 import type { Route } from "./+types/instructor.$courseId.students";
 import { getCurrentUserId } from "~/lib/session";
 import { UserRole } from "~/db/schema";
 import { Card, CardContent } from "~/components/ui/card";
 import { Button } from "~/components/ui/button";
+import { RefundedBadge } from "~/components/refunded-badge";
 import { AlertTriangle, ArrowLeft, Users, Award } from "lucide-react";
 import { data, isRouteErrorResponse } from "react-router";
 import { db } from "~/db";
@@ -17,6 +18,7 @@ import {
   quizAttempts,
   lessonProgress,
   LessonProgressStatus,
+  RevocationReason,
 } from "~/db/schema";
 import { eq, and, or, sql, desc } from "drizzle-orm";
 
@@ -28,17 +30,52 @@ function getCourseById(id: number) {
   return db.select().from(courses).where(eq(courses.id, id)).get();
 }
 
-function getCourseEnrolledStudents(courseId: number) {
-  return db
+const ROSTER_FILTERS = [
+  { value: "active", label: "Active" },
+  { value: "revoked", label: "Revoked" },
+  { value: "all", label: "All" },
+] as const;
+
+type RosterFilter = (typeof ROSTER_FILTERS)[number]["value"];
+
+function parseRosterFilter(value: string | null): RosterFilter {
+  return ROSTER_FILTERS.some((f) => f.value === value)
+    ? (value as RosterFilter)
+    : "active";
+}
+
+/**
+ * One row per learner: their latest Enrollment. A learner who bought again
+ * after a refund has an Active Enrollment newer than the revoked one, so
+ * they appear once, as active.
+ */
+function getCourseStudents(courseId: number, filter: RosterFilter) {
+  const rows = db
     .select({
       enrollmentId: enrollments.id,
       userId: enrollments.userId,
       enrolledAt: enrollments.enrolledAt,
       completedAt: enrollments.completedAt,
+      revokedAt: enrollments.revokedAt,
+      revocationReason: enrollments.revocationReason,
     })
     .from(enrollments)
     .where(eq(enrollments.courseId, courseId))
+    .orderBy(desc(enrollments.enrolledAt), desc(enrollments.id))
     .all();
+
+  const latestByUser = new Map<number, (typeof rows)[number]>();
+  for (const row of rows) {
+    if (!latestByUser.has(row.userId)) latestByUser.set(row.userId, row);
+  }
+
+  return [...latestByUser.values()].filter((row) =>
+    filter === "all"
+      ? true
+      : filter === "revoked"
+        ? row.revokedAt !== null
+        : row.revokedAt === null
+  );
 }
 
 function getQuizByLessonId(lessonId: number) {
@@ -182,8 +219,8 @@ export async function loader({ params, request }: Route.LoaderArgs) {
     });
   }
 
-  // Get all enrolled students
-  const enrolledStudents = getCourseEnrolledStudents(courseId);
+  const filter = parseRosterFilter(new URL(request.url).searchParams.get("show"));
+  const enrolledStudents = getCourseStudents(courseId, filter);
 
   // Get all lessons with quizzes for this course
   const courseModules = db
@@ -245,12 +282,14 @@ export async function loader({ params, request }: Route.LoaderArgs) {
       email: studentUser?.email ?? "",
       enrolledAt: enrollment.enrolledAt,
       completedAt: enrollment.completedAt,
+      revoked: enrollment.revokedAt !== null,
+      refunded: enrollment.revocationReason === RevocationReason.Refunded,
       progress,
       quizScores,
     };
   });
 
-  return { course, students, quizCount: lessonQuizzes.length };
+  return { course, students, quizCount: lessonQuizzes.length, filter };
 }
 
 function progressBar(progress: number) {
@@ -292,7 +331,8 @@ function quizScoreBadge(score: number | null, passed: boolean | null) {
 export default function InstructorStudentRoster({
   loaderData,
 }: Route.ComponentProps) {
-  const { course, students, quizCount } = loaderData;
+  const { course, students, quizCount, filter } = loaderData;
+  const [, setSearchParams] = useSearchParams();
 
   return (
     <div className="mx-auto max-w-7xl p-6 lg:p-8">
@@ -328,7 +368,11 @@ export default function InstructorStudentRoster({
         <span className="flex items-center gap-1.5">
           <Users className="size-4" />
           {students.length} {students.length === 1 ? "student" : "students"}{" "}
-          enrolled
+          {filter === "active"
+            ? "enrolled"
+            : filter === "revoked"
+              ? "revoked"
+              : "in total"}
         </span>
         {quizCount > 0 && (
           <span className="flex items-center gap-1.5">
@@ -338,12 +382,43 @@ export default function InstructorStudentRoster({
         )}
       </div>
 
+      <div
+        role="tablist"
+        aria-label="Which students to show"
+        className="mb-4 inline-flex rounded-md border border-border p-0.5"
+      >
+        {ROSTER_FILTERS.map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            role="tab"
+            aria-selected={filter === option.value}
+            onClick={() =>
+              setSearchParams((prev) => {
+                if (option.value === "active") prev.delete("show");
+                else prev.set("show", option.value);
+                return prev;
+              })
+            }
+            className={`rounded px-3 py-1 text-sm ${
+              filter === option.value
+                ? "bg-primary text-primary-foreground"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+
       {students.length === 0 ? (
         <Card>
           <CardContent className="py-8 text-center">
             <Users className="mx-auto mb-3 size-8 text-muted-foreground/50" />
             <p className="text-muted-foreground">
-              No students enrolled in this course yet.
+              {filter === "revoked"
+                ? "No revoked students."
+                : "No students enrolled in this course yet."}
             </p>
           </CardContent>
         </Card>
@@ -390,8 +465,15 @@ export default function InstructorStudentRoster({
                       >
                         <td className="px-4 py-3">
                           <div>
-                            <p className="text-sm font-medium">
+                            <p className="flex items-center gap-2 text-sm font-medium">
                               {student.name}
+                              {student.refunded ? (
+                                <RefundedBadge />
+                              ) : student.revoked ? (
+                                <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-800 dark:bg-gray-900/30 dark:text-gray-400">
+                                  Revoked
+                                </span>
+                              ) : null}
                             </p>
                             <p className="text-xs text-muted-foreground">
                               {student.email}

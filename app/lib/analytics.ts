@@ -101,3 +101,18 @@ export function splitRevenue(grossCents: number) {
   const feeCents = Math.round(grossCents * PLATFORM_FEE_RATE);
   return { grossCents, feeCents, netCents: grossCents - feeCents };
 }
+
+/**
+ * Gross sales less refunds, then split into the platform's fee and the
+ * instructor's net. The fee is taken on net sales: when a sale is refunded,
+ * the platform hands its cut back too.
+ *
+ * A refund counts in the period its Refund Request was approved, which is not
+ * necessarily the period of the sale — so a quiet period with a refund can
+ * show negative net sales. That is deliberate: it is what happened.
+ */
+export function revenueAfterRefunds(grossCents: number, refundedCents: number) {
+  const netSalesCents = grossCents - refundedCents;
+  const { feeCents, netCents } = splitRevenue(netSalesCents);
+  return { grossCents, refundedCents, netSalesCents, feeCents, netCents };
+}

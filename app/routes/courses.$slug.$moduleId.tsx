@@ -30,6 +30,7 @@ import {
 import { data, isRouteErrorResponse } from "react-router";
 import { formatDuration } from "~/lib/utils";
 import { z } from "zod";
+import { isActiveEnrollment } from "~/lib/refunds.server";
 
 const paramsSchema = z.object({
   slug: z.string().min(1),
@@ -116,7 +117,11 @@ function isUserEnrolled(userId: number, courseId: number) {
     .select()
     .from(enrollments)
     .where(
-      and(eq(enrollments.userId, userId), eq(enrollments.courseId, courseId))
+      and(
+        eq(enrollments.userId, userId),
+        eq(enrollments.courseId, courseId),
+        isActiveEnrollment
+      )
     )
     .get();
 

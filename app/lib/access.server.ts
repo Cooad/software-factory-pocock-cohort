@@ -6,11 +6,11 @@ import {
   users,
   courses,
   enrollments,
-  purchases,
 } from "~/db/schema";
 import { getCurrentUserId } from "~/lib/session";
 import { resolveCountry } from "~/lib/country.server";
 import { checkPppAccess } from "~/lib/ppp";
+import { getLatestPurchase, isActiveEnrollment } from "~/lib/refunds.server";
 
 function getUserById(id: number) {
   return db.select().from(users).where(eq(users.id, id)).get();
@@ -25,7 +25,11 @@ function findEnrollment(userId: number, courseId: number) {
     .select()
     .from(enrollments)
     .where(
-      and(eq(enrollments.userId, userId), eq(enrollments.courseId, courseId))
+      and(
+        eq(enrollments.userId, userId),
+        eq(enrollments.courseId, courseId),
+        isActiveEnrollment
+      )
     )
     .get();
 }
@@ -34,12 +38,10 @@ function isUserEnrolled(userId: number, courseId: number) {
   return !!findEnrollment(userId, courseId);
 }
 
+// PPP checks the learner's latest purchase. After a refund and a second
+// purchase, the old refunded one must not decide where they may watch from.
 function findPurchase(userId: number, courseId: number) {
-  return db
-    .select()
-    .from(purchases)
-    .where(and(eq(purchases.userId, userId), eq(purchases.courseId, courseId)))
-    .get();
+  return getLatestPurchase(db, userId, courseId);
 }
 
 // ─── Access Resolution ───

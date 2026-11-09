@@ -1,5 +1,5 @@
 import Database from "better-sqlite3";
-import { eq, gte, isNotNull, isNull, sql, type SQL } from "drizzle-orm";
+import { and, eq, gte, isNotNull, isNull, sql, type SQL } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import type { SQLiteTable } from "drizzle-orm/sqlite-core";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
@@ -10,7 +10,10 @@ import {
   UserRole,
   CourseStatus,
   LessonProgressStatus,
+  RefundEventKind,
+  RefundRequestStatus,
   RefundStatus,
+  RevocationReason,
   QuestionType,
   TeamMemberRole,
 } from "../app/db/schema";
@@ -77,7 +80,9 @@ async function seed() {
     DROP TABLE IF EXISTS coupons;
     DROP TABLE IF EXISTS team_members;
     DROP TABLE IF EXISTS teams;
+    DROP TABLE IF EXISTS refund_events;
     DROP TABLE IF EXISTS refunds;
+    DROP TABLE IF EXISTS refund_requests;
     DROP TABLE IF EXISTS purchases;
     DROP TABLE IF EXISTS enrollments;
     DROP TABLE IF EXISTS lessons;
@@ -2715,7 +2720,7 @@ This course is still in draft while the cluster examples are rewritten against t
   );
 
   // Four seats on Design Systems, bought during launch week, none redeemed yet.
-  createTeamPurchase(
+  const novakTeam = createTeamPurchase(
     "marta.novak@student.dev",
     course3,
     4,
@@ -2772,16 +2777,215 @@ This course is still in draft while the cluster examples are rewritten against t
       updatedAt: daysAgo(6),
     })
     .run();
-  db.insert(schema.refunds)
+  db.insert(schema.refundRequests)
     .values({
       purchaseId: liamPurchase.id,
-      status: RefundStatus.Open,
+      status: RefundRequestStatus.Open,
       reason: "Bought the wrong one, I meant the advanced course.",
       requestedAt: daysAgo(4),
     })
     .run();
 
   console.log("Created Liam's Refund Request.");
+
+  // ─── Refunds in every state ───
+  // So /admin/refunds has something in each tab: a team purchase whose Seats
+  // are Held, a Declined request, and Approved ones whose Refund is Pending,
+  // Failed and Issued. The Issued one commented first, to show the Refunded
+  // badge on lesson comments.
+
+  // Marta's four unclaimed Design Systems Seats are now Held Seats.
+  db.insert(schema.refundRequests)
+    .values({
+      purchaseId: novakTeam.purchase.id,
+      status: RefundRequestStatus.Open,
+      reason:
+        "Our team changed direction this quarter and nobody will take the course.",
+      requestedAt: daysAgo(2),
+    })
+    .run();
+
+  // A learner with no purchase and no enrollment in the course yet, so each
+  // scenario stands alone.
+  function learnerNewTo(courseId: number, skip: number[] = []) {
+    const learner = allStudents.find((student) => {
+      if (skip.includes(student.id)) return false;
+      const bought = db
+        .select({ id: schema.purchases.id })
+        .from(schema.purchases)
+        .where(
+          and(
+            eq(schema.purchases.userId, student.id),
+            eq(schema.purchases.courseId, courseId)
+          )
+        )
+        .get();
+      const enrolled = db
+        .select({ id: schema.enrollments.id })
+        .from(schema.enrollments)
+        .where(
+          and(
+            eq(schema.enrollments.userId, student.id),
+            eq(schema.enrollments.courseId, courseId)
+          )
+        )
+        .get();
+      return !bought && !enrolled;
+    });
+    if (!learner) throw new Error(`No student is new to course ${courseId}`);
+    return learner;
+  }
+
+  function refundScenario(input: {
+    course: typeof course1;
+    boughtDaysAgo: number;
+    requestedDaysAgo: number;
+    reason: string;
+    skip?: number[];
+    decision: {
+      status: RefundRequestStatus.Approved | RefundRequestStatus.Declined;
+      daysAgo: number;
+      note: string | null;
+    };
+  }) {
+    const learner = learnerNewTo(input.course.id, input.skip);
+    const [purchase] = db
+      .insert(schema.purchases)
+      .values({
+        userId: learner.id,
+        courseId: input.course.id,
+        amountPaid: input.course.price,
+        country: "US",
+        createdAt: daysAgo(input.boughtDaysAgo),
+      })
+      .returning()
+      .all();
+    const approved = input.decision.status === RefundRequestStatus.Approved;
+    db.insert(schema.enrollments)
+      .values({
+        userId: learner.id,
+        courseId: input.course.id,
+        enrolledAt: daysAgo(input.boughtDaysAgo),
+        revokedAt: approved ? daysAgo(input.decision.daysAgo) : null,
+        revocationReason: approved ? RevocationReason.Refunded : null,
+      })
+      .run();
+    const [request] = db
+      .insert(schema.refundRequests)
+      .values({
+        purchaseId: purchase.id,
+        status: input.decision.status,
+        reason: input.reason,
+        requestedAt: daysAgo(input.requestedDaysAgo),
+        decisionNote: input.decision.note,
+        decidedAt: daysAgo(input.decision.daysAgo),
+        decidedByUserId: admin.id,
+      })
+      .returning()
+      .all();
+    return { learner, purchase, request };
+  }
+
+  function addRefund(
+    request: typeof schema.refundRequests.$inferSelect,
+    amount: number,
+    status: RefundStatus,
+    events: { kind: RefundEventKind; daysAgo: number; note?: string }[]
+  ) {
+    const issued = events.find((e) => e.kind === RefundEventKind.Issued);
+    const [refund] = db
+      .insert(schema.refunds)
+      .values({
+        refundRequestId: request.id,
+        amount,
+        status,
+        createdAt: request.decidedAt!,
+        issuedAt: issued ? daysAgo(issued.daysAgo) : null,
+      })
+      .returning()
+      .all();
+    for (const event of events) {
+      db.insert(schema.refundEvents)
+        .values({
+          refundId: refund.id,
+          kind: event.kind,
+          note: event.note ?? null,
+          byUserId: admin.id,
+          createdAt: daysAgo(event.daysAgo),
+        })
+        .run();
+    }
+  }
+
+  // Declined, with a Decision Note — the learner may ask again.
+  refundScenario({
+    course: course2,
+    boughtDaysAgo: 8,
+    requestedDaysAgo: 6,
+    reason: "The pace is too slow for me, I expected more advanced material.",
+    decision: {
+      status: RefundRequestStatus.Declined,
+      daysAgo: 4,
+      note: "The course page lists the level as beginner, so we can't refund on pace alone. Modules 4–6 go deeper — give them a try.",
+    },
+  });
+
+  // Approved, Refund Pending — waiting for an Admin to confirm the money went.
+  const pending = refundScenario({
+    course: course2,
+    boughtDaysAgo: 10,
+    requestedDaysAgo: 5,
+    reason: "My employer is paying for a different course instead.",
+    decision: { status: RefundRequestStatus.Approved, daysAgo: 1, note: null },
+  });
+  addRefund(
+    pending.request,
+    pending.purchase.amountPaid,
+    RefundStatus.Pending,
+    []
+  );
+
+  // Approved, Refund Failed — needs an Admin to retry.
+  const failed = refundScenario({
+    course: course3,
+    boughtDaysAgo: 12,
+    requestedDaysAgo: 9,
+    reason: "Accidentally bought it twice on two accounts.",
+    decision: {
+      status: RefundRequestStatus.Approved,
+      daysAgo: 7,
+      note: "Sorry about the double charge — refunding this one.",
+    },
+  });
+  addRefund(failed.request, failed.purchase.amountPaid, RefundStatus.Failed, [
+    {
+      kind: RefundEventKind.Failed,
+      daysAgo: 5,
+      note: "The card issuer rejected it — the card has been closed. Need another way to pay back.",
+    },
+  ]);
+
+  // Approved and Issued. They commented before leaving, so their comment
+  // carries the Refunded badge.
+  const issued = refundScenario({
+    course: course1,
+    boughtDaysAgo: 20,
+    requestedDaysAgo: 18,
+    reason: "Too much going on at work right now, I won't get to it.",
+    skip: [liam.id],
+    decision: { status: RefundRequestStatus.Approved, daysAgo: 16, note: null },
+  });
+  addRefund(issued.request, issued.purchase.amountPaid, RefundStatus.Issued, [
+    { kind: RefundEventKind.Issued, daysAgo: 14 },
+  ]);
+  comment({
+    lessonId: course1LessonIds[0],
+    userId: issued.learner.id,
+    body: "Is there a transcript for this video? The audio is a bit quiet.",
+    createdAt: daysAgo(19),
+  });
+
+  console.log("Created Refund Requests in every state.");
 
   // ─── Flush watch events ───
   // Batched: the heartbeat makes these by far the largest table, and one
@@ -2836,6 +3040,9 @@ This course is still in draft while the cluster examples are rewritten against t
   );
   console.log(
     `  Teams: ${countRows(schema.teams)}, coupons: ${countRows(schema.coupons)} (${countRows(schema.coupons, isNotNull(schema.coupons.redeemedByUserId))} redeemed)`
+  );
+  console.log(
+    `  Refund requests: ${countRows(schema.refundRequests)} (${countRows(schema.refundRequests, eq(schema.refundRequests.status, RefundRequestStatus.Open))} open), refunds: ${countRows(schema.refunds)}`
   );
 }
 

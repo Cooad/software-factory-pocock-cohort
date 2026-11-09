@@ -9,6 +9,7 @@ import {
   rangeStart,
   parseAnalyticsRange,
   splitRevenue,
+  revenueAfterRefunds,
 } from "./analytics";
 
 describe("analytics config", () => {
@@ -180,6 +181,31 @@ describe("analytics config", () => {
       // does not block a later tidy-up of the padding.
       expect(formatBucket("2026-13-05").trim()).toBe("5");
       expect(formatBucket("2026-99").trim()).toBe("26");
+    });
+  });
+
+  describe("revenueAfterRefunds", () => {
+    it("takes refunds off gross sales before the fee", () => {
+      expect(revenueAfterRefunds(10000, 2500)).toEqual({
+        grossCents: 10000,
+        refundedCents: 2500,
+        netSalesCents: 7500,
+        feeCents: 1500,
+        netCents: 6000,
+      });
+    });
+
+    it("leaves revenue alone when nothing was refunded", () => {
+      const { grossCents, feeCents, netCents } = revenueAfterRefunds(7900, 0);
+      expect({ grossCents, feeCents, netCents }).toEqual(splitRevenue(7900));
+    });
+
+    it("goes negative when a period refunds more than it sells", () => {
+      // The refund lands in the period it was approved, not the period of
+      // the sale. The figures must still add up.
+      const result = revenueAfterRefunds(0, 7900);
+      expect(result.netSalesCents).toBe(-7900);
+      expect(result.feeCents + result.netCents).toBe(result.netSalesCents);
     });
   });
 });

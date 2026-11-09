@@ -15,6 +15,7 @@ import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
 import { PartyPopper, MessageCircle, PlayCircle } from "lucide-react";
 import { data } from "react-router";
+import { isActiveEnrollment } from "~/lib/refunds.server";
 
 function getCourseBySlug(slug: string) {
   return db.select().from(courses).where(eq(courses.slug, slug)).get();
@@ -82,7 +83,11 @@ function isUserEnrolled(userId: number, courseId: number) {
     .select()
     .from(enrollments)
     .where(
-      and(eq(enrollments.userId, userId), eq(enrollments.courseId, courseId))
+      and(
+        eq(enrollments.userId, userId),
+        eq(enrollments.courseId, courseId),
+        isActiveEnrollment
+      )
     )
     .get();
   return !!enrollment;

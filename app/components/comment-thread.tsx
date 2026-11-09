@@ -5,6 +5,7 @@ import { MessageSquare, Pencil, Reply, Trash2 } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
 import { Textarea } from "~/components/ui/textarea";
+import { RefundedBadge } from "~/components/refunded-badge";
 import { UserAvatar } from "~/components/user-avatar";
 import { cn, formatRelativeTime } from "~/lib/utils";
 import { MAX_COMMENT_LENGTH } from "~/lib/comments";
@@ -25,6 +26,8 @@ export type RenderedComment = {
     avatarUrl: string | null;
     isInstructor: boolean;
     isAdmin: boolean;
+    /** No longer on the course because their Refund Request was approved. */
+    isRefunded: boolean;
   };
   replies: RenderedComment[];
 };
@@ -238,6 +241,7 @@ function CommentItem({
             <span className="text-sm font-medium">{comment.author.name}</span>
             {comment.author.isInstructor && <AuthorBadge label="Instructor" />}
             {comment.author.isAdmin && <AuthorBadge label="Admin" />}
+            {comment.author.isRefunded && <RefundedBadge />}
             <span
               className="text-xs text-muted-foreground"
               suppressHydrationWarning

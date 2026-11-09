@@ -17,6 +17,7 @@ import { Skeleton } from "~/components/ui/skeleton";
 import { AlertTriangle, BookOpen, CheckCircle2, GraduationCap, PlayCircle } from "lucide-react";
 import { CourseImage } from "~/components/course-image";
 import { data, isRouteErrorResponse } from "react-router";
+import { isActiveEnrollment } from "~/lib/refunds.server";
 
 function getUserEnrolledCourses(userId: number) {
   return db
@@ -32,7 +33,7 @@ function getUserEnrolledCourses(userId: number) {
     })
     .from(enrollments)
     .innerJoin(courses, eq(enrollments.courseId, courses.id))
-    .where(eq(enrollments.userId, userId))
+    .where(and(eq(enrollments.userId, userId), isActiveEnrollment))
     .all();
 }
 

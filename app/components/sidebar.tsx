@@ -14,6 +14,7 @@ import {
   Users,
   UsersRound,
   Moon,
+  ReceiptText,
   Sun,
   LogOut,
   Settings,
@@ -40,6 +41,8 @@ interface SidebarProps {
   currentUser: CurrentUser | null;
   recentCourses?: RecentCourse[];
   isTeamAdmin?: boolean;
+  /** Open Refund Requests plus Pending and Failed Refunds (Admins only). */
+  refundsNeedingAction?: number;
 }
 
 interface NavItem {
@@ -47,6 +50,7 @@ interface NavItem {
   to: string;
   icon: React.ReactNode;
   roles: UserRole[] | "all";
+  badge?: "refunds";
 }
 
 const navItems: NavItem[] = [
@@ -98,6 +102,13 @@ const navItems: NavItem[] = [
     icon: <Tag className="size-4" />,
     roles: [UserRole.Admin],
   },
+  {
+    label: "Refunds",
+    to: "/admin/refunds",
+    icon: <ReceiptText className="size-4" />,
+    roles: [UserRole.Admin],
+    badge: "refunds",
+  },
 ];
 
 function isVisible(item: NavItem, role: UserRole | null): boolean {
@@ -110,6 +121,7 @@ export function Sidebar({
   currentUser,
   recentCourses = [],
   isTeamAdmin = false,
+  refundsNeedingAction = 0,
 }: SidebarProps) {
   const currentUserRole = currentUser?.role ?? null;
   const [isDark, setIsDark] = useState(false);
@@ -153,6 +165,11 @@ export function Sidebar({
             >
               {item.icon}
               {item.label}
+              {item.badge === "refunds" && refundsNeedingAction > 0 && (
+                <span className="ml-auto rounded-full bg-primary px-1.5 text-xs text-primary-foreground">
+                  {refundsNeedingAction}
+                </span>
+              )}
             </NavLink>
           ))}
         {isTeamAdmin && (

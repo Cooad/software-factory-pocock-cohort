@@ -15,7 +15,7 @@ import {
   users,
 } from "~/db/schema";
 import { db } from "~/db";
-import { eq, or, sql } from "drizzle-orm";
+import { and, eq, or, sql } from "drizzle-orm";
 import { Card, CardContent } from "~/components/ui/card";
 import { Button } from "~/components/ui/button";
 import { Skeleton } from "~/components/ui/skeleton";
@@ -28,6 +28,7 @@ import {
 } from "~/components/ui/select";
 import { AlertTriangle, BookOpen, Users } from "lucide-react";
 import { data, isRouteErrorResponse, Link } from "react-router";
+import { isActiveEnrollment } from "~/lib/refunds.server";
 
 const adminCourseActionSchema = z.discriminatedUnion("intent", [
   z.object({
@@ -67,7 +68,7 @@ function getEnrollmentCountForCourse(courseId: number) {
   const result = db
     .select({ count: sql<number>`count(*)` })
     .from(enrollments)
-    .where(eq(enrollments.courseId, courseId))
+    .where(and(eq(enrollments.courseId, courseId), isActiveEnrollment))
     .get();
 
   return result?.count ?? 0;

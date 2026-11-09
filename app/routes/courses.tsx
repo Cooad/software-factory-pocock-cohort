@@ -25,6 +25,7 @@ import { formatPrice } from "~/lib/utils";
 import { resolveCountry } from "~/lib/country.server";
 import { calculatePppPrice } from "~/lib/ppp";
 import { StarRating } from "~/components/star-rating";
+import { isActiveEnrollment } from "~/lib/refunds.server";
 
 function buildCourseQuery(
   search: string | null,
@@ -127,7 +128,7 @@ function getUserEnrolledCourses(userId: number) {
     })
     .from(enrollmentsTable)
     .innerJoin(coursesTable, eq(enrollmentsTable.courseId, coursesTable.id))
-    .where(eq(enrollmentsTable.userId, userId))
+    .where(and(eq(enrollmentsTable.userId, userId), isActiveEnrollment))
     .all();
 }
 

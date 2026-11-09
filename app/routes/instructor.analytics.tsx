@@ -34,9 +34,17 @@ import {
   purchases,
   quizAttempts,
   quizzes,
+  refundRequests,
+  refunds,
+  RefundRequestStatus,
   users,
 } from "~/db/schema";
-import { splitRevenue, type AnalyticsRange } from "~/lib/analytics";
+import {
+  revenueAfterRefunds,
+  splitRevenue,
+  type AnalyticsRange,
+} from "~/lib/analytics";
+import { isActiveEnrollment } from "~/lib/refunds.server";
 import { getDiscountForCountry } from "~/lib/ppp";
 import {
   ANALYTICS_RANGES,
@@ -82,7 +90,8 @@ import { AlertTriangle, Rocket } from "lucide-react";
 type AnalyticsTab = "overview" | "course";
 
 const chartConfig = {
-  grossCents: { label: "Gross revenue", color: "var(--chart-1)" },
+  grossCents: { label: "Gross sales", color: "var(--chart-1)" },
+  refundedCents: { label: "Refunded", color: "var(--chart-3)" },
   netCents: { label: "Net earnings", color: "var(--chart-2)" },
 } satisfies ChartConfig;
 
@@ -101,14 +110,18 @@ function parseId(value: string | null): number | null {
 
 type RevenueSummary = {
   grossCents: number;
+  refundedCents: number;
+  netSalesCents: number;
   feeCents: number;
   netCents: number;
   purchaseCount: number;
+  refundCount: number;
 };
 
 type RevenuePoint = {
   bucket: string;
   grossCents: number;
+  refundedCents: number;
   netCents: number;
 };
 
@@ -221,6 +234,18 @@ function purchaseScope(instructorId: number | null, range: AnalyticsRange) {
   return scopeOn(purchases.createdAt, instructorId, range);
 }
 
+/**
+ * Refunds in scope. A refund counts in the period its Refund Request was
+ * approved — Pending, Issued and Failed Refunds alike, because the decision to
+ * give the money back has been made either way.
+ */
+function refundScope(instructorId: number | null, range: AnalyticsRange) {
+  return and(
+    eq(refundRequests.status, RefundRequestStatus.Approved),
+    scopeOn(refundRequests.decidedAt, instructorId, range)
+  );
+}
+
 function sinceRange(dateColumn: SQLiteColumn, range: AnalyticsRange) {
   const start = rangeStart(range);
   return start === null ? undefined : gte(dateColumn, start);
@@ -241,7 +266,9 @@ function getStudentRevenue(
     .from(enrollments)
     .innerJoin(courses, eq(enrollments.courseId, courses.id))
     .innerJoin(users, eq(users.id, enrollments.userId))
-    .where(scopeOn(enrollments.enrolledAt, instructorId, range))
+    .where(
+      and(scopeOn(enrollments.enrolledAt, instructorId, range), isActiveEnrollment)
+    )
     .orderBy(users.name)
     .all();
 
@@ -448,26 +475,49 @@ function getRevenueOverTime(
     .orderBy(bucketExpr)
     .all();
 
-  if (rows.length === 0 && range === "all") return { granularity, points: [] };
+  const refundBucketExpr = sql<string>`substr(${refundRequests.decidedAt}, 1, ${
+    granularity === "day" ? 10 : 7
+  })`;
+  const refundRows = db
+    .select({ bucket: refundBucketExpr, refunded: sum(refunds.amount) })
+    .from(refunds)
+    .innerJoin(refundRequests, eq(refunds.refundRequestId, refundRequests.id))
+    .innerJoin(purchases, eq(refundRequests.purchaseId, purchases.id))
+    .innerJoin(courses, eq(purchases.courseId, courses.id))
+    .where(refundScope(instructorId, range))
+    .groupBy(refundBucketExpr)
+    .orderBy(refundBucketExpr)
+    .all();
+
+  if (rows.length === 0 && refundRows.length === 0 && range === "all") {
+    return { granularity, points: [] };
+  }
 
   const grossByBucket = new Map(
     rows.map((row) => [row.bucket, Number(row.gross ?? 0)])
   );
+  const refundedByBucket = new Map(
+    refundRows.map((row) => [row.bucket, Number(row.refunded ?? 0)])
+  );
+  const firstBucket = [rows[0]?.bucket, refundRows[0]?.bucket]
+    .filter((bucket): bucket is string => !!bucket)
+    .sort()[0];
 
   const now = new Date().toISOString();
   // A fixed range always spans its whole window, even before the first sale;
   // all time can only start where the data does.
-  const start = rangeStart(range) ?? rows[0].bucket;
+  const start = rangeStart(range) ?? firstBucket;
 
   const points = bucketRange(
     bucketOf(start, granularity),
     bucketOf(now, granularity),
     granularity
   ).map((bucket) => {
-    const { grossCents, netCents } = splitRevenue(
-      grossByBucket.get(bucket) ?? 0
+    const { grossCents, refundedCents, netCents } = revenueAfterRefunds(
+      grossByBucket.get(bucket) ?? 0,
+      refundedByBucket.get(bucket) ?? 0
     );
-    return { bucket, grossCents, netCents };
+    return { bucket, grossCents, refundedCents, netCents };
   });
 
   return { granularity, points };
@@ -508,7 +558,7 @@ function getCourseProgressSummary(courseId: number): CourseProgressSummary {
         inArray(lessonProgress.lessonId, courseLessonIds(courseId))
       )
     )
-    .where(eq(enrollments.courseId, courseId))
+    .where(and(eq(enrollments.courseId, courseId), isActiveEnrollment))
     .groupBy(enrollments.userId)
     .all();
 
@@ -546,7 +596,7 @@ function getCourseDropOff(courseId: number): CourseFunnel {
   const enrolled = db
     .select({ enrolledCount: countDistinct(enrollments.userId) })
     .from(enrollments)
-    .where(eq(enrollments.courseId, courseId))
+    .where(and(eq(enrollments.courseId, courseId), isActiveEnrollment))
     .get();
 
   const enrolledCount = enrolled?.enrolledCount ?? 0;
@@ -583,7 +633,8 @@ function getCourseDropOff(courseId: number): CourseFunnel {
       enrollments,
       and(
         eq(enrollments.userId, lessonProgress.userId),
-        eq(enrollments.courseId, courseId)
+        eq(enrollments.courseId, courseId),
+        isActiveEnrollment
       )
     )
     .where(
@@ -885,7 +936,7 @@ export async function loader({ request, url }: Route.LoaderArgs) {
     older: (questionRow?.total ?? 0) - questionsInRange,
   };
 
-  // Gross revenue, the platform's fee and the instructor's net for the range.
+  // Gross sales, refunds, the platform's fee and the instructor's net.
   const summaryRow = db
     .select({
       gross: sum(purchases.amountPaid),
@@ -896,14 +947,27 @@ export async function loader({ request, url }: Route.LoaderArgs) {
     .where(purchaseScope(instructorId, range))
     .get();
 
+  const refundedRow = db
+    .select({ refunded: sum(refunds.amount), refundCount: count(refunds.id) })
+    .from(refunds)
+    .innerJoin(refundRequests, eq(refunds.refundRequestId, refundRequests.id))
+    .innerJoin(purchases, eq(refundRequests.purchaseId, purchases.id))
+    .innerJoin(courses, eq(purchases.courseId, courses.id))
+    .where(refundScope(instructorId, range))
+    .get();
+
   // sum() returns null over an empty set, and a string when SQLite has rows.
   const summary: RevenueSummary = {
-    ...splitRevenue(Number(summaryRow?.gross ?? 0)),
+    ...revenueAfterRefunds(
+      Number(summaryRow?.gross ?? 0),
+      Number(refundedRow?.refunded ?? 0)
+    ),
     purchaseCount: summaryRow?.purchaseCount ?? 0,
+    refundCount: refundedRow?.refundCount ?? 0,
   };
 
-  // Revenue broken down by course, biggest earner first. Courses with no sales
-  // in the range are absent rather than listed at zero.
+  // Revenue broken down by course, biggest earner first. Courses with neither
+  // sales nor refunds in the range are absent rather than listed at zero.
   const courseRevenueRows = db
     .select({
       courseId: courses.id,
@@ -917,14 +981,51 @@ export async function loader({ request, url }: Route.LoaderArgs) {
     .groupBy(courses.id)
     .all();
 
-  const courseRevenue = courseRevenueRows
-    .map((row) => ({
-      courseId: row.courseId,
+  const courseRefundRows = db
+    .select({
+      courseId: courses.id,
+      title: courses.title,
+      refunded: sum(refunds.amount),
+    })
+    .from(refunds)
+    .innerJoin(refundRequests, eq(refunds.refundRequestId, refundRequests.id))
+    .innerJoin(purchases, eq(refundRequests.purchaseId, purchases.id))
+    .innerJoin(courses, eq(purchases.courseId, courses.id))
+    .where(refundScope(instructorId, range))
+    .groupBy(courses.id)
+    .all();
+
+  const courseTotals = new Map<
+    number,
+    { title: string; gross: number; refunded: number; purchaseCount: number }
+  >();
+  for (const row of courseRevenueRows) {
+    courseTotals.set(row.courseId, {
       title: row.title,
-      ...splitRevenue(Number(row.gross ?? 0)),
+      gross: Number(row.gross ?? 0),
+      refunded: 0,
       purchaseCount: row.purchaseCount,
+    });
+  }
+  for (const row of courseRefundRows) {
+    const totals = courseTotals.get(row.courseId) ?? {
+      title: row.title,
+      gross: 0,
+      refunded: 0,
+      purchaseCount: 0,
+    };
+    totals.refunded = Number(row.refunded ?? 0);
+    courseTotals.set(row.courseId, totals);
+  }
+
+  const courseRevenue = [...courseTotals]
+    .map(([courseId, totals]) => ({
+      courseId,
+      title: totals.title,
+      ...revenueAfterRefunds(totals.gross, totals.refunded),
+      purchaseCount: totals.purchaseCount,
     }))
-    .sort((a, b) => b.grossCents - a.grossCents);
+    .sort((a, b) => b.netSalesCents - a.netSalesCents);
 
   // How many people paid, and how many are learning. Deliberately two numbers:
   // one team purchase is a single buyer covering several seats, and someone who
@@ -1206,6 +1307,13 @@ function RevenueChart({ series }: { series: RevenueSeries }) {
           type="monotone"
           stroke="var(--color-grossCents)"
           fill="var(--color-grossCents)"
+          fillOpacity={0.2}
+        />
+        <Area
+          dataKey="refundedCents"
+          type="monotone"
+          stroke="var(--color-refundedCents)"
+          fill="var(--color-refundedCents)"
           fillOpacity={0.2}
         />
         <Area
@@ -1631,23 +1739,32 @@ export default function InstructorAnalytics({
           </TabsList>
 
           <TabsContent value="overview" className="space-y-6">
-            <div className="grid gap-4 sm:grid-cols-3">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <MoneyCard
-                label="Gross revenue"
+                label="Gross sales"
                 amountCents={summary.grossCents}
                 hint={`What students paid, across ${summary.purchaseCount} ${
                   summary.purchaseCount === 1 ? "purchase" : "purchases"
                 }.`}
               />
               <MoneyCard
+                label="Refunded"
+                amountCents={summary.refundedCents}
+                hint={`${summary.refundCount} ${
+                  summary.refundCount === 1 ? "refund" : "refunds"
+                } approved in this period, whenever the sale was.`}
+              />
+              <MoneyCard
                 label={`Platform fee (${PLATFORM_FEE_PERCENT}%)`}
                 amountCents={summary.feeCents}
-                hint="Cadence's cut. Already deducted from your earnings."
+                hint={`Cadence's cut of net sales (${formatMoney(
+                  summary.netSalesCents
+                )}). Refunded sales carry no fee.`}
               />
               <MoneyCard
                 label="Your net earnings"
                 amountCents={summary.netCents}
-                hint="What you keep — gross revenue minus the platform fee."
+                hint="What you keep — gross sales, minus refunds, minus the platform fee."
                 emphasis
               />
             </div>
@@ -1716,7 +1833,7 @@ export default function InstructorAnalytics({
                     range always spans its whole window, so an instructor with
                     no sales would otherwise get a flat line along zero rather
                     than being told there is nothing there. */}
-                {summary.purchaseCount === 0 ? (
+                {summary.purchaseCount === 0 && summary.refundCount === 0 ? (
                   <p className="py-12 text-center text-sm text-muted-foreground">
                     No sales in this period yet.
                   </p>
@@ -1850,6 +1967,9 @@ export default function InstructorAnalytics({
                         <th className="pb-2 text-right font-medium">Sales</th>
                         <th className="pb-2 text-right font-medium">Gross</th>
                         <th className="pb-2 text-right font-medium">
+                          Refunded
+                        </th>
+                        <th className="pb-2 text-right font-medium">
                           Fee ({PLATFORM_FEE_PERCENT}%)
                         </th>
                         <th className="pb-2 text-right font-medium">Net</th>
@@ -1864,6 +1984,11 @@ export default function InstructorAnalytics({
                           </td>
                           <td className="py-3 text-right tabular-nums">
                             {formatMoney(course.grossCents)}
+                          </td>
+                          <td className="py-3 text-right tabular-nums text-muted-foreground">
+                            {course.refundedCents === 0
+                              ? "—"
+                              : `−${formatMoney(course.refundedCents)}`}
                           </td>
                           <td className="py-3 text-right tabular-nums text-muted-foreground">
                             {formatMoney(course.feeCents)}

@@ -12,16 +12,18 @@ import { Label } from "~/components/ui/label";
 import { Textarea } from "~/components/ui/textarea";
 import {
   UserRole,
+  RefundRequestStatus,
   RefundStatus,
   users,
   courses,
   purchases,
+  refundRequests,
   refunds,
 } from "~/db/schema";
 import { AlertTriangle } from "lucide-react";
 import { data, isRouteErrorResponse, Link } from "react-router";
 import { db } from "~/db";
-import { and, eq } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { formatPrice } from "~/lib/utils";
 
 const settingsSchema = z.object({
@@ -55,25 +57,35 @@ export async function loader({ request }: Route.LoaderArgs) {
     throw data("User not found.", { status: 404 });
   }
 
-  const openRefundRequests = db
+  const myRefundRequests = db
     .select({
-      id: refunds.id,
+      id: refundRequests.id,
+      status: refundRequests.status,
       courseTitle: courses.title,
       courseSlug: courses.slug,
       amountPaid: purchases.amountPaid,
-      reason: refunds.reason,
-      requestedAt: refunds.requestedAt,
+      reason: refundRequests.reason,
+      requestedAt: refundRequests.requestedAt,
+      decisionNote: refundRequests.decisionNote,
+      decidedAt: refundRequests.decidedAt,
+      refundStatus: refunds.status,
+      refundAmount: refunds.amount,
+      issuedAt: refunds.issuedAt,
     })
-    .from(refunds)
-    .innerJoin(purchases, eq(refunds.purchaseId, purchases.id))
+    .from(refundRequests)
+    .innerJoin(purchases, eq(refundRequests.purchaseId, purchases.id))
     .innerJoin(courses, eq(purchases.courseId, courses.id))
-    .where(
-      and(
-        eq(purchases.userId, currentUserId),
-        eq(refunds.status, RefundStatus.Open)
-      )
-    )
+    .leftJoin(refunds, eq(refunds.refundRequestId, refundRequests.id))
+    .where(eq(purchases.userId, currentUserId))
+    .orderBy(desc(refundRequests.requestedAt))
     .all();
+
+  const openRefundRequests = myRefundRequests.filter(
+    (r) => r.status !== RefundRequestStatus.Approved
+  );
+  const refunded = myRefundRequests.filter(
+    (r) => r.status === RefundRequestStatus.Approved
+  );
 
   return {
     user: {
@@ -84,6 +96,7 @@ export async function loader({ request }: Route.LoaderArgs) {
       role: currentUser.role,
     },
     openRefundRequests,
+    refunded,
   };
 }
 
@@ -122,7 +135,7 @@ export async function action({ request }: Route.ActionArgs) {
 }
 
 export default function Settings({ loaderData }: Route.ComponentProps) {
-  const { user, openRefundRequests } = loaderData;
+  const { user, openRefundRequests, refunded } = loaderData;
   const fetcher = useFetcher();
   const nameInputRef = useRef<HTMLInputElement>(null);
 
@@ -213,37 +226,122 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
         <Card className="mt-8 max-w-md">
           <CardHeader>
             <h2 className="text-lg font-semibold">Refund Requests</h2>
-            <p className="text-sm text-muted-foreground">
-              {openRefundRequests.length === 1
-                ? "One refund request is waiting on us."
-                : `${openRefundRequests.length} refund requests are waiting on us.`}
-            </p>
           </CardHeader>
           <CardContent className="space-y-4">
-            {openRefundRequests.map((refundRequest) => (
-              <div key={refundRequest.id} className="rounded-md border p-3">
-                <div className="flex items-start justify-between gap-3">
-                  <Link
-                    to={`/courses/${refundRequest.courseSlug}`}
-                    className="font-medium hover:underline"
-                  >
-                    {refundRequest.courseTitle}
-                  </Link>
-                  <span className="shrink-0 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
-                    Open
-                  </span>
+            {openRefundRequests.map((refundRequest) => {
+              const isOpen = refundRequest.status === RefundRequestStatus.Open;
+              return (
+                <div key={refundRequest.id} className="rounded-md border p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <Link
+                      to={`/courses/${refundRequest.courseSlug}`}
+                      className="font-medium hover:underline"
+                    >
+                      {refundRequest.courseTitle}
+                    </Link>
+                    <StatusPill tone={isOpen ? "amber" : "muted"}>
+                      {isOpen ? "Open" : "Declined"}
+                    </StatusPill>
+                  </div>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {formatPrice(refundRequest.amountPaid)} · raised{" "}
+                    {new Date(refundRequest.requestedAt).toLocaleDateString()}
+                  </p>
+                  <p className="mt-2 text-sm">{refundRequest.reason}</p>
+                  {isOpen ? (
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      Waiting on us — we'll email you when it's decided.
+                    </p>
+                  ) : (
+                    <DecisionNote note={refundRequest.decisionNote} />
+                  )}
                 </div>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {formatPrice(refundRequest.amountPaid)} · raised{" "}
-                  {new Date(refundRequest.requestedAt).toLocaleDateString()}
-                </p>
-                <p className="mt-2 text-sm">{refundRequest.reason}</p>
-              </div>
-            ))}
+              );
+            })}
+          </CardContent>
+        </Card>
+      )}
+
+      {refunded.length > 0 && (
+        <Card className="mt-8 max-w-md">
+          <CardHeader>
+            <h2 className="text-lg font-semibold">Refunded</h2>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {refunded.map((refundRequest) => {
+              const amount = formatPrice(
+                refundRequest.refundAmount ?? refundRequest.amountPaid
+              );
+              return (
+                <div key={refundRequest.id} className="rounded-md border p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <Link
+                      to={`/courses/${refundRequest.courseSlug}`}
+                      className="font-medium hover:underline"
+                    >
+                      {refundRequest.courseTitle}
+                    </Link>
+                    <StatusPill
+                      tone={
+                        refundRequest.refundStatus === RefundStatus.Issued
+                          ? "green"
+                          : "amber"
+                      }
+                    >
+                      {refundRequest.refundStatus === RefundStatus.Issued
+                        ? "Refunded"
+                        : "Approved"}
+                    </StatusPill>
+                  </div>
+                  <p className="mt-1 text-sm">
+                    {refundRequest.refundStatus === RefundStatus.Issued &&
+                    refundRequest.issuedAt
+                      ? `Refunded ${amount} on ${new Date(refundRequest.issuedAt).toLocaleDateString()}.`
+                      : refundRequest.refundStatus === RefundStatus.Failed
+                        ? "Approved — we're sorting out a problem sending your refund."
+                        : `Approved — your refund of ${amount} is on its way.`}
+                  </p>
+                  <DecisionNote note={refundRequest.decisionNote} />
+                </div>
+              );
+            })}
           </CardContent>
         </Card>
       )}
     </div>
+  );
+}
+
+function StatusPill({
+  tone,
+  children,
+}: {
+  tone: "amber" | "green" | "muted";
+  children: React.ReactNode;
+}) {
+  const tones = {
+    amber:
+      "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
+    green:
+      "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300",
+    muted: "bg-muted text-muted-foreground",
+  };
+  return (
+    <span
+      className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium ${tones[tone]}`}
+    >
+      {children}
+    </span>
+  );
+}
+
+function DecisionNote({ note }: { note: string | null }) {
+  if (!note) return null;
+  return (
+    <p className="mt-2 border-l-2 pl-3 text-sm text-muted-foreground">
+      <span className="font-medium text-foreground">Our note: </span>
+      {note}
+    </p>
   );
 }
 

@@ -12,7 +12,8 @@ import { Ticket, AlertCircle, CheckCircle2, Globe } from "lucide-react";
 import { data } from "react-router";
 import { db } from "~/db";
 import { purchases, coupons, courses, enrollments } from "~/db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, isNull } from "drizzle-orm";
+import { hasOpenRefundRequest, isActiveEnrollment } from "~/lib/refunds.server";
 
 function getCourseById(id: number) {
   return db.select().from(courses).where(eq(courses.id, id)).get();
@@ -27,12 +28,23 @@ function isUserEnrolled(userId: number, courseId: number) {
     .select()
     .from(enrollments)
     .where(
-      and(eq(enrollments.userId, userId), eq(enrollments.courseId, courseId))
+      and(
+        eq(enrollments.userId, userId),
+        eq(enrollments.courseId, courseId),
+        isActiveEnrollment
+      )
     )
     .get();
 
   return !!existing;
 }
+
+// A Held Seat: its purchase has an Open Refund Request. The refund itself is
+// the purchaser's business, so the teammate isn't told any more than this.
+const HELD_SEAT_MESSAGE =
+  "This seat is on hold while the purchaser's refund request is decided. Try again later or contact the person who sent you this code.";
+const VOIDED_SEAT_MESSAGE =
+  "This code is no longer valid. Contact the person who sent it to you.";
 
 type RedeemResult =
   | { ok: true; enrollment: typeof enrollments.$inferSelect }
@@ -52,18 +64,15 @@ function redeemCoupon(
     return { ok: false, error: "Coupon has already been redeemed" };
   }
 
-  const existingEnrollment = db
-    .select()
-    .from(enrollments)
-    .where(
-      and(
-        eq(enrollments.userId, userId),
-        eq(enrollments.courseId, coupon.courseId)
-      )
-    )
-    .get();
+  if (coupon.voidedAt) {
+    return { ok: false, error: VOIDED_SEAT_MESSAGE };
+  }
 
-  if (existingEnrollment) {
+  if (hasOpenRefundRequest(db, coupon.purchaseId)) {
+    return { ok: false, error: HELD_SEAT_MESSAGE };
+  }
+
+  if (isUserEnrolled(userId, coupon.courseId)) {
     return { ok: false, error: "You are already enrolled in this course" };
   }
 
@@ -81,13 +90,26 @@ function redeemCoupon(
     };
   }
 
-  db.update(coupons)
+  // Guarded so a Seat voided or claimed a moment ago can't be claimed.
+  const claimed = db
+    .update(coupons)
     .set({
       redeemedByUserId: userId,
       redeemedAt: new Date().toISOString(),
     })
-    .where(eq(coupons.id, coupon.id))
-    .run();
+    .where(
+      and(
+        eq(coupons.id, coupon.id),
+        isNull(coupons.redeemedAt),
+        isNull(coupons.voidedAt)
+      )
+    )
+    .returning()
+    .get();
+
+  if (!claimed) {
+    return { ok: false, error: "This code can no longer be redeemed." };
+  }
 
   const enrollment = db
     .insert(enrollments)
@@ -135,6 +157,9 @@ export async function loader({ params, request }: Route.LoaderArgs) {
   }
 
   const alreadyRedeemed = coupon.redeemedByUserId !== null;
+  const voided = !alreadyRedeemed && coupon.voidedAt !== null;
+  const held =
+    !alreadyRedeemed && !voided && hasOpenRefundRequest(db, coupon.purchaseId);
   const alreadyEnrolled = isUserEnrolled(currentUserId, coupon.courseId);
 
   // Check country mismatch upfront so we can show a clear message
@@ -157,6 +182,8 @@ export async function loader({ params, request }: Route.LoaderArgs) {
     alreadyRedeemed,
     alreadyEnrolled,
     countryMismatch,
+    voided,
+    held,
   };
 }
 
@@ -194,8 +221,15 @@ export default function Redeem({
   loaderData,
   actionData,
 }: Route.ComponentProps) {
-  const { course, code, alreadyRedeemed, alreadyEnrolled, countryMismatch } =
-    loaderData;
+  const {
+    course,
+    code,
+    alreadyRedeemed,
+    alreadyEnrolled,
+    countryMismatch,
+    voided,
+    held,
+  } = loaderData;
   const fetcher = useFetcher();
   const isSubmitting = fetcher.state !== "idle";
 
@@ -240,6 +274,18 @@ export default function Redeem({
               <p className="mt-2 text-sm text-muted-foreground">
                 Someone has already claimed this seat. Please ask the person who
                 shared this link for a new coupon.
+              </p>
+            </div>
+          ) : voided || held ? (
+            <div className="rounded-lg bg-amber-50 p-4 dark:bg-amber-900/20">
+              <div className="flex items-center justify-center gap-2 text-amber-700 dark:text-amber-400">
+                <AlertCircle className="size-5" />
+                <span className="font-medium">
+                  {voided ? "This code is no longer valid" : "This seat is on hold"}
+                </span>
+              </div>
+              <p className="mt-2 text-sm text-muted-foreground">
+                {voided ? VOIDED_SEAT_MESSAGE : HELD_SEAT_MESSAGE}
               </p>
             </div>
           ) : alreadyEnrolled ? (

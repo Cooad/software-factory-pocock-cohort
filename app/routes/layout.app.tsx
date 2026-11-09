@@ -17,7 +17,13 @@ import {
   teamMembers,
   TeamMemberRole,
   LessonProgressStatus,
+  UserRole,
+  enrollments,
 } from "~/db/schema";
+import {
+  countRefundsNeedingAction,
+  isActiveEnrollment,
+} from "~/lib/refunds.server";
 
 function getAllUsers() {
   return db.select().from(users).all();
@@ -164,6 +170,15 @@ function getRecentlyProgressedCourses(userId: number, limit: number = 3) {
     .innerJoin(lessons, eq(lessonProgress.lessonId, lessons.id))
     .innerJoin(modules, eq(lessons.moduleId, modules.id))
     .innerJoin(courses, eq(modules.courseId, courses.id))
+    // Only courses the learner can still open — progress outlives a refund.
+    .innerJoin(
+      enrollments,
+      and(
+        eq(enrollments.courseId, courses.id),
+        eq(enrollments.userId, userId),
+        isActiveEnrollment
+      )
+    )
     .where(eq(lessonProgress.userId, userId))
     .groupBy(courses.id)
     .orderBy(desc(sql`max(${lessonProgress.id})`))
@@ -213,6 +228,8 @@ export async function loader({ request }: Route.LoaderArgs) {
     countryTierInfo,
     countries: COUNTRIES,
     isTeamAdmin: currentUserId ? isTeamAdmin(currentUserId) : false,
+    refundsNeedingAction:
+      currentUser?.role === UserRole.Admin ? countRefundsNeedingAction(db) : 0,
   };
 }
 
@@ -225,6 +242,7 @@ export default function AppLayout({ loaderData }: Route.ComponentProps) {
     countryTierInfo,
     countries,
     isTeamAdmin: userIsTeamAdmin,
+    refundsNeedingAction,
   } = loaderData;
 
   return (
@@ -233,6 +251,7 @@ export default function AppLayout({ loaderData }: Route.ComponentProps) {
         currentUser={currentUser}
         recentCourses={recentCourses}
         isTeamAdmin={userIsTeamAdmin}
+        refundsNeedingAction={refundsNeedingAction}
       />
       <main className="flex-1 overflow-y-auto">
         <Outlet />

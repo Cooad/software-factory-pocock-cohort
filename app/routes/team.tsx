@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "react-router";
+import { Form, Link, useNavigation } from "react-router";
 import type { Route } from "./+types/team";
 import { getCurrentUserId } from "~/lib/session";
 import { Card, CardContent, CardHeader } from "~/components/ui/card";
@@ -16,6 +16,9 @@ import {
   TeamMemberRole,
 } from "~/db/schema";
 import { eq, and } from "drizzle-orm";
+import { Textarea } from "~/components/ui/textarea";
+import { formatPrice } from "~/lib/utils";
+import { getRefundOffer, hasOpenRefundRequest } from "~/lib/refunds.server";
 
 function getTeamForAdmin(userId: number) {
   const membership = db
@@ -61,6 +64,17 @@ interface CouponRow {
   courseTitle: string;
   redeemedByEmail: string | null;
   createdAt: string;
+  /** "held" while its purchase has an Open Refund Request. */
+  state: "claimed" | "voided" | "held" | "unclaimed";
+}
+
+interface TeamRefundOffer {
+  courseId: number;
+  courseSlug: string;
+  courseTitle: string;
+  amount: number;
+  seatCount: number;
+  lastDayInWindow: string;
 }
 
 export function meta() {
@@ -127,6 +141,12 @@ export async function loader({ request }: Route.LoaderArgs) {
     })
   );
 
+  const heldPurchaseIds = new Set(
+    [...new Set(allCoupons.map((c) => c.purchaseId))].filter((id) =>
+      hasOpenRefundRequest(db, id)
+    )
+  );
+
   // Build coupon rows with redeemer email
   const couponRows: CouponRow[] = allCoupons.map((coupon) => {
     let redeemedByEmail: string | null = null;
@@ -142,10 +162,37 @@ export async function loader({ request }: Route.LoaderArgs) {
       courseTitle: course?.title ?? "Unknown Course",
       redeemedByEmail,
       createdAt: coupon.createdAt,
+      state:
+        coupon.redeemedByUserId !== null
+          ? "claimed"
+          : coupon.voidedAt
+            ? "voided"
+            : heldPurchaseIds.has(coupon.purchaseId)
+              ? "held"
+              : "unclaimed",
     };
   });
 
-  return { courseStats, couponRows };
+  // A team purchase can be refunded only while none of its Seats is claimed.
+  // The refund action works on the buyer's latest purchase of the course, so
+  // offer it only when that purchase is one of this team's.
+  const teamPurchaseIds = new Set(allCoupons.map((c) => c.purchaseId));
+  const refundOffers: TeamRefundOffer[] = [];
+  for (const stat of courseStats) {
+    const result = getRefundOffer(db, currentUserId, stat.courseId);
+    if ("offer" in result && teamPurchaseIds.has(result.offer.purchaseId)) {
+      refundOffers.push({
+        courseId: stat.courseId,
+        courseSlug: stat.courseSlug,
+        courseTitle: stat.courseTitle,
+        amount: result.offer.amount,
+        seatCount: result.offer.seatCount,
+        lastDayInWindow: result.offer.lastDayInWindow,
+      });
+    }
+  }
+
+  return { courseStats, couponRows, refundOffers };
 }
 
 function CopyButton({ code }: { code: string }) {
@@ -181,7 +228,7 @@ function CopyButton({ code }: { code: string }) {
 }
 
 export default function Team({ loaderData }: Route.ComponentProps) {
-  const { courseStats, couponRows } = loaderData;
+  const { courseStats, couponRows, refundOffers } = loaderData;
   const [courseFilter, setCourseFilter] = useState<number | "all">("all");
 
   const filteredCoupons =
@@ -292,9 +339,23 @@ export default function Team({ loaderData }: Route.ComponentProps) {
                       {coupon.courseTitle}
                     </td>
                     <td className="px-4 py-3">
-                      {coupon.redeemedByEmail ? (
+                      {coupon.state === "claimed" ? (
                         <span className="text-muted-foreground">
                           Claimed by {coupon.redeemedByEmail}
+                        </span>
+                      ) : coupon.state === "voided" ? (
+                        <span
+                          className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground"
+                          title="This purchase was refunded, so the code no longer works."
+                        >
+                          Refunded — no longer valid
+                        </span>
+                      ) : coupon.state === "held" ? (
+                        <span
+                          className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
+                          title="Can't be redeemed while your refund request is decided."
+                        >
+                          On hold
                         </span>
                       ) : (
                         <span className="inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">
@@ -303,7 +364,8 @@ export default function Team({ loaderData }: Route.ComponentProps) {
                       )}
                     </td>
                     <td className="px-4 py-3">
-                      {!coupon.redeemedByEmail && (
+                      {(coupon.state === "unclaimed" ||
+                        coupon.state === "held") && (
                         <CopyButton code={coupon.code} />
                       )}
                     </td>
@@ -314,7 +376,78 @@ export default function Team({ loaderData }: Route.ComponentProps) {
           </div>
         )}
       </div>
+
+      {couponRows.some((c) => c.state === "held") && (
+        <p className="mt-4 text-sm text-muted-foreground">
+          Codes on hold can&apos;t be redeemed while we decide your refund
+          request. If we approve it they stop working for good; if we decline
+          it they work again straight away.
+        </p>
+      )}
+
+      {refundOffers.map((offer) => (
+        <TeamRefundForm key={offer.courseId} offer={offer} />
+      ))}
     </div>
+  );
+}
+
+function TeamRefundForm({ offer }: { offer: TeamRefundOffer }) {
+  const [open, setOpen] = useState(false);
+  const navigation = useNavigation();
+  const isSubmitting = navigation.state === "submitting";
+
+  if (!open) {
+    return (
+      <div className="mt-8">
+        <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
+          Request a refund for {offer.courseTitle}
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <Card className="mt-8 max-w-xl">
+      <CardHeader>
+        <h2 className="text-lg font-semibold">
+          Request a refund — {offer.courseTitle}
+        </h2>
+        <p className="text-sm text-muted-foreground">
+          {formatPrice(offer.amount)} for {offer.seatCount} seats. You can ask
+          until{" "}
+          {new Date(`${offer.lastDayInWindow}T00:00:00`).toLocaleDateString()}.
+        </p>
+      </CardHeader>
+      <CardContent>
+        <div className="mb-4 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+          While we decide, none of your {offer.seatCount} codes can be
+          redeemed. If we approve, all {offer.seatCount} stop working for good.
+        </div>
+        <Form method="post" action={`/courses/${offer.courseSlug}/refund`}>
+          <input type="hidden" name="redirectTo" value="/team" />
+          <Textarea
+            name="reason"
+            required
+            minLength={10}
+            maxLength={1000}
+            placeholder="Why do you want a refund?"
+          />
+          <div className="mt-3 flex gap-2">
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? "Sending..." : "Request a refund"}
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setOpen(false)}
+            >
+              Cancel
+            </Button>
+          </div>
+        </Form>
+      </CardContent>
+    </Card>
   );
 }
 

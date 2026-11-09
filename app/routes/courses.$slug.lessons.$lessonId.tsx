@@ -55,6 +55,7 @@ import { data, isRouteErrorResponse } from "react-router";
 import { z } from "zod";
 import { COUNTRIES } from "~/lib/ppp";
 import { parseFormData, parseParams } from "~/lib/validation";
+import { getRefundedLearnerIds } from "~/lib/refunds.server";
 
 const lessonParamsSchema = z.object({
   slug: z.string().min(1),
@@ -88,6 +89,8 @@ type CommentAuthor = {
   avatarUrl: string | null;
   isInstructor: boolean;
   isAdmin: boolean;
+  /** Has no Active Enrollment because their Refund Request was approved. */
+  isRefunded: boolean;
 };
 
 type ThreadComment = {
@@ -363,6 +366,12 @@ function getLessonThread(lessonId: number): ThreadComment[] {
     .orderBy(asc(comments.createdAt), asc(comments.id))
     .all();
 
+  // The badge shows who the learner is now, not when they wrote: it goes
+  // away if they buy the course again.
+  const refundedAuthorIds = getRefundedLearnerIds(db, course.courseId, [
+    ...new Set(rows.map((row) => row.authorId)),
+  ]);
+
   const toThreadComment = (row: (typeof rows)[number]): ThreadComment => {
     const deleted = row.deletedAt !== null;
     return {
@@ -377,6 +386,7 @@ function getLessonThread(lessonId: number): ThreadComment[] {
         avatarUrl: row.authorAvatarUrl,
         isInstructor: row.authorId === course.instructorId,
         isAdmin: row.authorRole === UserRole.Admin,
+        isRefunded: refundedAuthorIds.has(row.authorId),
       },
       replies: [],
     };

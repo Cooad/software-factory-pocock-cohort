@@ -58,6 +58,7 @@ import {
 import { data, isRouteErrorResponse } from "react-router";
 import { z } from "zod";
 import { parseFormData, parseParams } from "~/lib/validation";
+import { isActiveEnrollment } from "~/lib/refunds.server";
 
 function getUserById(id: number) {
   return db.select().from(users).where(eq(users.id, id)).get();
@@ -360,7 +361,7 @@ function getEnrollmentCountForCourse(courseId: number) {
   const result = db
     .select({ count: sql<number>`count(*)` })
     .from(enrollments)
-    .where(eq(enrollments.courseId, courseId))
+    .where(and(eq(enrollments.courseId, courseId), isActiveEnrollment))
     .get();
 
   return result?.count ?? 0;
@@ -375,7 +376,7 @@ function getCourseEnrolledStudents(courseId: number) {
       completedAt: enrollments.completedAt,
     })
     .from(enrollments)
-    .where(eq(enrollments.courseId, courseId))
+    .where(and(eq(enrollments.courseId, courseId), isActiveEnrollment))
     .all();
 }
 
