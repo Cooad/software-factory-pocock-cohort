@@ -1,0 +1,3 @@
+# Refund Requests and Refunds are separate records
+
+A Refund Request (the learner's ask, decided by an Admin) and a Refund (the money going back) have separate lifecycles: a request is Open, Approved or Declined, while a Refund is Pending, Issued or Failed, and a Failed Refund can be retried without changing the decision. We store them in two tables — `refund_requests`, and `refunds` with one row per Approved Refund Request — rather than adding money-status columns to the request row. There is no payment provider yet and Admins move Refunds by hand, but this shape is where a provider's payout ids, attempts and failures will attach later without reworking the request side.
