@@ -1,6 +1,6 @@
 # Cadence
 
-Cadence sells video courses to students. This glossary covers the language around buying, taking and refunding courses, and telling people about it.
+Cadence sells video courses to students. This glossary covers the language around buying, taking, discussing and refunding courses, and telling people about it.
 
 ## Language
 
@@ -102,3 +102,17 @@ _Avoid_: Alert, Message, Activity
 **Notification Feed**:
 The place inside Cadence where a person sees their Notifications.
 _Avoid_: Inbox, Activity feed
+
+**Transactional Notification**:
+A Notification about a person's money, such as the receipt or outcome of their Refund Request, that they can't opt out of.
+_Avoid_: Mandatory notification, System notification
+
+### Discussion
+
+**Discussion Question**:
+A top-level comment a person posts on a lesson, whether or not it ends in a question mark. It lands in the course's Instructor's queue.
+_Avoid_: Question (on its own), Lesson Question, Comment, Thread, Post
+
+**Discussion Reply**:
+A comment posted under a Discussion Question. Anyone on the lesson can post one, and they go only one level deep.
+_Avoid_: Reply (on its own), Question Reply, Answer
