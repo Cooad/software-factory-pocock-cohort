@@ -15,6 +15,7 @@ import {
   Settings,
   UsersRound,
 } from "lucide-react";
+import { z } from "zod";
 import { UserAvatar } from "~/components/user-avatar";
 import {
   emptyFeedClient,
@@ -49,10 +50,27 @@ const categoryIcons: Record<NotificationCategoryIcon, typeof Bell> = {
   enrollment: GraduationCap,
 };
 
+const credentialsSchema = z.object({
+  userId: z.string(),
+  userToken: z.string(),
+  publicApiKey: z.string(),
+  feedChannelId: z.string(),
+});
+
+/** Freshly signed credentials for the session user, or null if there are none. */
+async function fetchFeedCredentials(): Promise<NotificationFeedCredentials | null> {
+  const response = await fetch("/api/notification-credentials");
+  if (!response.ok) return null;
+  const parsed = credentialsSchema.safeParse(await response.json());
+  return parsed.success ? parsed.data : null;
+}
+
 /**
  * One feed client per signed-in user. Switching users in the DevUI changes the
  * credentials' user id, which tears the old client (and its socket) down and
- * builds a new one with the fresh token.
+ * builds a new one with the fresh token. Every navigation brings a newly
+ * signed token for the same user; the client is offered it and keeps its
+ * connection, switching tokens only when its own is about to expire.
  */
 function useFeedClient(credentials: NotificationFeedCredentials | null) {
   const [client, setClient] = useState<NotificationFeedClient | null>(null);
@@ -73,7 +91,7 @@ function useFeedClient(credentials: NotificationFeedCredentials | null) {
     import("~/lib/notification-feed.knock").then(
       ({ createKnockFeedClient }) => {
         if (cancelled) return;
-        created = createKnockFeedClient(current);
+        created = createKnockFeedClient(current, fetchFeedCredentials);
         setClient(created);
       },
       (error) => {
@@ -87,6 +105,10 @@ function useFeedClient(credentials: NotificationFeedCredentials | null) {
       setClient(null);
     };
   }, [key]);
+
+  useEffect(() => {
+    if (client && credentials) client.offerCredentials(credentials);
+  }, [client, credentials]);
 
   return { client, key };
 }

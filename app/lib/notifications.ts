@@ -4,9 +4,19 @@
 // renders them through the presenter). Nothing here knows about Knock: the
 // adapters map these names to the vendor's keys.
 //
-// Adding a kind: add it to `NotificationDataByKind` with its data shape, then
-// follow the compiler (presenter, Knock adapters' key tables). See
-// notes.md for spec #29.
+// Adding a kind:
+// 1. Add its data type to `NotificationDataByKind` and its schema to
+//    `NOTIFICATION_SCHEMAS` below. Keep the data flat scalars, and only give it
+//    a `commentId` if it is about a comment: archiving on comment delete finds
+//    messages by that field.
+// 2. Follow the compiler: its entry in `PRESENTERS` (notification-presenter.ts),
+//    `WORKFLOW_KEY_BY_KIND` (notifications.knock.ts) and
+//    `PREFERENCE_CATEGORY_BY_KIND` (notification-preferences.ts).
+// 3. Add its workflow folder to `knock/workflows/` with that category (see
+//    knock/README.md); `knock-workflows.test.ts` checks they match.
+// 4. Trigger it from its service with `notifySafely` and an idempotency key.
+
+import { z } from "zod";
 
 /**
  * Data for Notification 7, sent to a Discussion Question's author when someone
@@ -111,6 +121,94 @@ export type NotificationDataByKind = {
 };
 
 export type NotificationKind = keyof NotificationDataByKind;
+
+const refundRequestFacts = z.object({
+  refundRequestId: z.number(),
+  purchaseId: z.number(),
+  courseSlug: z.string(),
+  courseTitle: z.string(),
+  amount: z.number(),
+});
+
+/** A kind and its data, still paired. */
+export type NotificationKindAndData<
+  K extends NotificationKind = NotificationKind,
+> = { kind: K; data: NotificationDataByKind[K] };
+
+function kindAndData<K extends NotificationKind>(
+  kind: K,
+  data: z.ZodType<NotificationDataByKind[K]>
+) {
+  return z.object({ kind: z.literal(kind), data });
+}
+
+/**
+ * Checks a kind and its data when they come back from the vendor (the feed),
+ * so a malformed message can be dropped instead of breaking the popover.
+ * Checked against `NotificationDataByKind`, so the two can't drift.
+ */
+export const NOTIFICATION_SCHEMAS = {
+  "discussion-reply": kindAndData(
+    "discussion-reply",
+    z.object({
+      commentId: z.number(),
+      questionId: z.number(),
+      courseSlug: z.string(),
+      courseTitle: z.string(),
+      lessonId: z.number(),
+      lessonTitle: z.string(),
+      snippet: z.string(),
+    })
+  ),
+  "discussion-question": kindAndData(
+    "discussion-question",
+    z.object({
+      commentId: z.number(),
+      courseSlug: z.string(),
+      courseTitle: z.string(),
+      lessonId: z.number(),
+      lessonTitle: z.string(),
+      snippet: z.string(),
+    })
+  ),
+  "seat-claimed": kindAndData(
+    "seat-claimed",
+    z.object({
+      seatId: z.number(),
+      purchaseId: z.number(),
+      courseSlug: z.string(),
+      courseTitle: z.string(),
+      seatsLeft: z.number(),
+    })
+  ),
+  "new-enrollment": kindAndData(
+    "new-enrollment",
+    z.object({
+      enrollmentId: z.number(),
+      courseId: z.number(),
+      courseSlug: z.string(),
+      courseTitle: z.string(),
+    })
+  ),
+  "refund-request-confirmation": kindAndData(
+    "refund-request-confirmation",
+    refundRequestFacts
+  ),
+  "open-refund-request": kindAndData(
+    "open-refund-request",
+    refundRequestFacts.extend({ buyerName: z.string(), reason: z.string() })
+  ),
+  "refund-request-approved": kindAndData(
+    "refund-request-approved",
+    refundRequestFacts.extend({ decisionNote: z.string().nullable() })
+  ),
+  "refund-request-declined": kindAndData(
+    "refund-request-declined",
+    refundRequestFacts.extend({ decisionNote: z.string() })
+  ),
+} satisfies {
+  [K in NotificationKind]: z.ZodType<NotificationKindAndData<K>>;
+};
 
 /**
  * What the browser needs to read one person's Notification Feed. Reaches the

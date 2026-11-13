@@ -36,6 +36,8 @@ const settingsSchema = z.object({
 });
 
 const SAVE_NOTIFICATION_PREFERENCE = "save-notification-preference";
+const PREFERENCE_SAVE_FAILED =
+  "Couldn't save your notification setting. Try again.";
 
 const notificationPreferenceSchema = z.object({
   category: z.enum(PREFERENCE_CATEGORIES),
@@ -161,10 +163,7 @@ export async function action({ request }: Route.ActionArgs) {
       );
     } catch (error) {
       console.error("[notifications] saving a preference failed:", error);
-      return data(
-        { preferenceError: "Couldn't save your notification setting. Try again." },
-        { status: 502 }
-      );
+      throw data(PREFERENCE_SAVE_FAILED, { status: 502 });
     }
     return { preferenceSaved: true };
   }
@@ -185,6 +184,26 @@ export async function action({ request }: Route.ActionArgs) {
     bio || null
   );
   return { success: true };
+}
+
+/**
+ * A failed preference save is thrown like any other failure. A switch is saved
+ * by a fetcher, though, so rather than replace the page with the error
+ * boundary, the switch gets the message back, shows a toast and reverts.
+ */
+export async function clientAction({ serverAction }: Route.ClientActionArgs) {
+  try {
+    return await serverAction();
+  } catch (error) {
+    if (
+      isRouteErrorResponse(error) &&
+      error.status === 502 &&
+      error.data === PREFERENCE_SAVE_FAILED
+    ) {
+      return { preferenceError: PREFERENCE_SAVE_FAILED };
+    }
+    throw error;
+  }
 }
 
 export default function Settings({ loaderData }: Route.ComponentProps) {
@@ -365,7 +384,7 @@ function NotificationsCard({
  * stored value, which puts the switch back.
  */
 function NotificationSwitch({ setting }: { setting: NotificationSetting }) {
-  const fetcher = useFetcher<typeof action>({
+  const fetcher = useFetcher<typeof clientAction>({
     key: `notification-preference-${setting.category}`,
   });
   const { label, description } = PREFERENCE_LABELS[setting.category];

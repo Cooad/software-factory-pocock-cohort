@@ -15,6 +15,10 @@ The repo is the source of truth for Cadence's Knock workflows. Each folder in `k
 
 Every workflow has one step, `feed`: an in-app feed step on the `cadence-feed` channel (the channel whose id is `KNOCK_FEED_CHANNEL_ID`). Cadence writes the row text and link itself from the trigger data, so the step's markdown body is only a fallback. To add email later, add a second channel step after `feed`.
 
+## Adding a workflow
+
+Each Notification kind has one workflow. To add one, follow "Adding a kind" at the top of `app/lib/notifications.ts`, copy a folder here, rename it to the kind's workflow key (`WORKFLOW_KEY_BY_KIND` in `app/lib/notifications.knock.ts`) and set its `categories` to the kind's category (`PREFERENCE_CATEGORY_BY_KIND`). `app/lib/knock-workflows.test.ts` fails if a folder and the code disagree.
+
 ## Pushing
 
 You need the Knock CLI logged in (`npx @knocklabs/cli login`) or a service token (`--service-token`).

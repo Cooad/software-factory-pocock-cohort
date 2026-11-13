@@ -1,13 +1,17 @@
 import Knock, { NotFoundError, signUserToken } from "@knocklabs/node";
-import type { NotificationKind } from "~/lib/notifications";
+import { z } from "zod";
 import {
+  DEFAULT_NOTIFICATION_PREFERENCES,
   NOTIFICATION_CHANNELS,
   PREFERENCE_CATEGORIES,
   type NotificationChannel,
   type NotificationPreferences,
-  type PreferenceCategory,
 } from "~/lib/notification-preferences";
 import { notificationHref } from "~/lib/notification-presenter";
+import {
+  KNOCK_CATEGORY_KEY,
+  WORKFLOW_KEY_BY_KIND,
+} from "~/lib/notifications.knock";
 import type {
   KnockConfig,
   NotificationPerson,
@@ -19,27 +23,6 @@ import type {
 // The only server code that talks to Knock. Maps Cadence's Notification kinds
 // to the workflow keys defined in `knock/workflows/` and Cadence users to Knock
 // users (Knock user id = Cadence user id as a string).
-
-const WORKFLOW_KEY: Record<NotificationKind, string> = {
-  "discussion-reply": "discussion-reply",
-  "discussion-question": "discussion-question",
-  "seat-claimed": "seat-claimed",
-  "new-enrollment": "new-enrollment",
-  "refund-request-confirmation": "refund-request-confirmation",
-  "open-refund-request": "open-refund-request",
-  "refund-request-approved": "refund-request-approved",
-  "refund-request-declined": "refund-request-declined",
-};
-
-/** Cadence preference category → Knock category key (see knock/workflows). */
-const CATEGORY_KEY: Record<PreferenceCategory, string> = {
-  "refund-request-updates": "refund-request-updates",
-  "open-refund-requests": "open-refund-requests",
-  "seat-claims": "seat-claims",
-  enrollments: "enrollments",
-  "discussion-questions": "discussion-questions",
-  "discussion-replies": "discussion-replies",
-};
 
 /** Cadence channel → Knock channel type. */
 const CHANNEL_TYPE: Record<NotificationChannel, "in_app_feed"> = {
@@ -54,14 +37,23 @@ const USER_TOKEN_TTL_SECONDS = 60 * 60;
 /** Knock's limit on `message_ids` in one batch call. */
 const BATCH_SIZE = 50;
 
-type KnockCategories = NonNullable<
-  Awaited<ReturnType<Knock["users"]["getPreferences"]>>["categories"]
->;
+/** Knock's preference set, as far as Cadence reads it. */
+const knockPreferenceSetSchema = z.object({
+  categories: z.record(z.string(), z.unknown()).nullish(),
+});
+
+/** One category in the set: a plain switch, or one per channel type. */
+const knockCategorySettingSchema = z.union([
+  z.boolean(),
+  z.object({
+    channel_types: z.record(z.string(), z.unknown()).nullish(),
+  }),
+]);
 
 function toKnockCategories(preferences: NotificationPreferences) {
   return Object.fromEntries(
     PREFERENCE_CATEGORIES.map((category) => [
-      CATEGORY_KEY[category],
+      KNOCK_CATEGORY_KEY[category],
       {
         channel_types: Object.fromEntries(
           NOTIFICATION_CHANNELS.map((channel) => [
@@ -74,26 +66,36 @@ function toKnockCategories(preferences: NotificationPreferences) {
   );
 }
 
-// Knock delivers when a category or channel type is missing from the set, so
-// a missing entry reads as on.
-function fromKnockCategories(
-  categories: KnockCategories
-): NotificationPreferences {
-  return Object.fromEntries(
-    PREFERENCE_CATEGORIES.map((category) => {
-      const setting = categories[CATEGORY_KEY[category]];
-      return [
-        category,
-        Object.fromEntries(
-          NOTIFICATION_CHANNELS.map((channel) => {
-            if (typeof setting === "boolean") return [channel, setting];
-            const value = setting?.channel_types?.[CHANNEL_TYPE[channel]];
-            return [channel, typeof value === "boolean" ? value : true];
-          })
-        ),
-      ];
-    })
-  ) as NotificationPreferences;
+/**
+ * A person's preferences from Knock's preference set, or null when none are
+ * stored. Knock answers with an all-null "default" set for a user who has
+ * never had preferences written, so no categories means none. Knock delivers
+ * when a category or channel type is missing, so a missing (or malformed)
+ * entry reads as on.
+ */
+export function preferencesFromKnock(set: unknown): NotificationPreferences | null {
+  const parsed = knockPreferenceSetSchema.safeParse(set);
+  if (!parsed.success) return null;
+  const categories = parsed.data.categories;
+  if (!categories || Object.keys(categories).length === 0) return null;
+
+  const preferences = structuredClone(DEFAULT_NOTIFICATION_PREFERENCES);
+  for (const category of PREFERENCE_CATEGORIES) {
+    const setting = knockCategorySettingSchema.safeParse(
+      categories[KNOCK_CATEGORY_KEY[category]]
+    );
+    for (const channel of NOTIFICATION_CHANNELS) {
+      let enabled = true;
+      if (setting.success && typeof setting.data === "boolean") {
+        enabled = setting.data;
+      } else if (setting.success && typeof setting.data === "object") {
+        const value = setting.data.channel_types?.[CHANNEL_TYPE[channel]];
+        if (typeof value === "boolean") enabled = value;
+      }
+      preferences[category][channel] = enabled;
+    }
+  }
+  return preferences;
 }
 
 function toKnockUser(person: NotificationPerson) {
@@ -112,7 +114,7 @@ export function knockNotifier(config: KnockConfig): Notifier {
   return {
     async trigger(notification) {
       await knock.workflows.trigger(
-        WORKFLOW_KEY[notification.kind],
+        WORKFLOW_KEY_BY_KIND[notification.kind],
         {
           recipients: notification.recipients.map(toKnockUser),
           actor: notification.actor ? toKnockUser(notification.actor) : null,
@@ -126,7 +128,8 @@ export function knockNotifier(config: KnockConfig): Notifier {
     async archiveCausedByComment(commentId) {
       // List Messages' `trigger_data` filter matches the data each trigger
       // carried, so no lookup table is needed (checked against Development:
-      // numeric values match exactly). See notes.md for spec #29, "#35".
+      // numeric values match exactly). It matches top-level keys, so only
+      // kinds about a comment may carry `commentId`.
       const messageIds: string[] = [];
       for await (const message of knock.messages.list({
         trigger_data: JSON.stringify({ commentId }),
@@ -162,15 +165,9 @@ export function knockNotifier(config: KnockConfig): Notifier {
 
     async getPreferences(userId) {
       try {
-        const set = await knock.users.getPreferences(
-          String(userId),
-          PREFERENCE_SET_ID
+        return preferencesFromKnock(
+          await knock.users.getPreferences(String(userId), PREFERENCE_SET_ID)
         );
-        // Knock answers with an all-null "default" set for a user who has
-        // never had preferences written, so no categories means none.
-        const categories = set.categories;
-        if (!categories || Object.keys(categories).length === 0) return null;
-        return fromKnockCategories(categories);
       } catch (error) {
         if (error instanceof NotFoundError) return null; // never identified
         throw error;

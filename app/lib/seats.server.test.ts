@@ -109,7 +109,7 @@ describe("claiming a Seat", () => {
 
     expect(result).toEqual({
       ok: false,
-      error: "Coupon has already been redeemed",
+      error: "This Seat has already been claimed",
     });
   });
 
@@ -149,7 +149,7 @@ describe("claiming a Seat", () => {
     expect(result).toEqual({
       ok: false,
       error:
-        "This coupon can only be redeemed from the same country as the purchaser",
+        "This Seat can only be claimed from the country its Team Licence was bought in",
     });
   });
 
@@ -190,7 +190,7 @@ describe("claiming a Seat", () => {
   it("refuses a code that isn't a Seat", async () => {
     expect(await claimSeat(db, notifier, "NOPE", base.user.id, "PL", NOW)).toEqual({
       ok: false,
-      error: "Coupon not found",
+      error: "Seat not found",
     });
   });
 });

@@ -107,7 +107,7 @@ export async function action({ request }: Route.ActionArgs) {
   if (intent === "update-user") {
     const { userId, name, email } = parsed.data;
     if (!getUserById(userId)) {
-      return data({ error: "User not found." }, { status: 404 });
+      throw data("User not found.", { status: 404 });
     }
     // Role changes (below) aren't synced to Notifications; name and email are.
     await adminUpdateUser(db, defaultNotifier(), userId, name, email);
