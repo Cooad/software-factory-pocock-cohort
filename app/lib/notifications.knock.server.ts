@@ -15,6 +15,7 @@ import type {
 
 const WORKFLOW_KEY: Record<NotificationKind, string> = {
   "discussion-reply": "discussion-reply",
+  "seat-claimed": "seat-claimed",
 };
 
 const USER_TOKEN_TTL_SECONDS = 60 * 60;
