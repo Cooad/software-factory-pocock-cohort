@@ -20,6 +20,7 @@ import {
   listRefundRequestsForReview,
   type RefundRequestForReview,
 } from "~/lib/refunds.server";
+import { defaultNotifier } from "~/lib/notifications.server";
 import { RULE_BREAK_LABELS } from "~/lib/refund-rules";
 import { sendEmail } from "~/lib/mailer.server";
 
@@ -108,15 +109,17 @@ export async function action({ request }: Route.ActionArgs) {
 
   const result =
     intent === "approve"
-      ? approveRefundRequest(
+      ? await approveRefundRequest(
           db,
+          defaultNotifier(),
           refundRequestId,
           platformAdmin.id,
           note || null,
           new Date()
         )
-      : declineRefundRequest(
+      : await declineRefundRequest(
           db,
+          defaultNotifier(),
           refundRequestId,
           platformAdmin.id,
           note,

@@ -69,8 +69,8 @@ function buySeats(seats: number, country: string | null = "PL") {
   return { purchase, seats: seatRows };
 }
 
-function raiseRefund(purchaseId: number) {
-  const result = raiseRefundRequest(db, purchaseId, teamAdmin.id, "Wrong course.", NOW);
+async function raiseRefund(purchaseId: number) {
+  const result = await raiseRefundRequest(db, notifier, purchaseId, teamAdmin.id, "Wrong course.", NOW);
   if (!result.ok) throw new Error(result.error);
   return result.refundRequestId;
 }
@@ -110,7 +110,7 @@ describe("claiming a Seat", () => {
 
   it("refuses an Unclaimed Seat while its Team Licence has an Open Refund Request", async () => {
     const { purchase, seats } = buySeats(2);
-    raiseRefund(purchase.id);
+    await raiseRefund(purchase.id);
 
     const result = await claimSeat(db, notifier, seats[0].code, base.user.id, "PL", NOW);
 
@@ -123,8 +123,8 @@ describe("claiming a Seat", () => {
 
   it("refuses an Unclaimed Seat once its Refund Request has been approved", async () => {
     const { purchase, seats } = buySeats(2);
-    const refundRequestId = raiseRefund(purchase.id);
-    const approved = approveRefundRequest(db, refundRequestId, platformAdmin.id, null, NOW);
+    const refundRequestId = await raiseRefund(purchase.id);
+    const approved = await approveRefundRequest(db, notifier, refundRequestId, platformAdmin.id, null, NOW);
     if (!approved.ok) throw new Error(approved.error);
 
     const result = await claimSeat(db, notifier, seats[0].code, base.user.id, "PL", NOW);

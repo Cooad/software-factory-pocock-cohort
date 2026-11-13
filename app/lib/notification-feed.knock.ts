@@ -28,6 +28,10 @@ const KIND_BY_WORKFLOW: Record<string, NotificationKind> = {
   "discussion-reply": "discussion-reply",
   "discussion-question": "discussion-question",
   "seat-claimed": "seat-claimed",
+  "refund-request-confirmation": "refund-request-confirmation",
+  "open-refund-request": "open-refund-request",
+  "refund-request-approved": "refund-request-approved",
+  "refund-request-declined": "refund-request-declined",
 };
 
 function toNotification(item: FeedItem): FeedNotification | null {

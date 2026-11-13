@@ -17,6 +17,10 @@ const WORKFLOW_KEY: Record<NotificationKind, string> = {
   "discussion-reply": "discussion-reply",
   "discussion-question": "discussion-question",
   "seat-claimed": "seat-claimed",
+  "refund-request-confirmation": "refund-request-confirmation",
+  "open-refund-request": "open-refund-request",
+  "refund-request-approved": "refund-request-approved",
+  "refund-request-declined": "refund-request-declined",
 };
 
 const USER_TOKEN_TTL_SECONDS = 60 * 60;

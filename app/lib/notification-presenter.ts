@@ -3,6 +3,7 @@ import type {
   NotificationDataByKind,
   NotificationKind,
 } from "~/lib/notifications";
+import { formatPrice } from "~/lib/utils";
 
 // ─── Notifications: the presenter ───
 // Pure: turns a Notification from the feed into what one popover row shows.
@@ -16,10 +17,7 @@ import type {
 
 /** Mapped to a lucide icon by the row component. */
 export type NotificationCategoryIcon =
-  | "discussion"
-  | "refund"
-  | "team"
-  | "enrollment";
+  "discussion" | "refund" | "team" | "enrollment";
 
 export type NotificationAvatar =
   | { kind: "sender"; name: string; avatarUrl: string | null }
@@ -61,6 +59,15 @@ export function notificationHref(notification: KindAndData): string | null {
     }
     case "seat-claimed":
       return "/team";
+    // Only marks it read: the buyer has nothing to do while it is reviewed.
+    case "refund-request-confirmation":
+      return null;
+    case "open-refund-request":
+      return "/admin/refunds";
+    // The buyer's Refund Requests, with their decision notes.
+    case "refund-request-approved":
+    case "refund-request-declined":
+      return "/settings";
     default: {
       // Once every kind has a case, the whole notification narrows to never.
       const unhandled: never = notification;
@@ -86,6 +93,39 @@ function describe(notification: FeedNotification, actor: string): Description {
         title: `${actor} asked a question in ${data.lessonTitle}`,
         snippet: `“${data.snippet}”`,
         categoryIcon: "discussion",
+      };
+    }
+    case "refund-request-confirmation": {
+      const data = notification.data;
+      return {
+        title: `Your refund request for ${data.courseTitle} is under review`,
+        snippet: `${formatPrice(data.amount)} · We'll let you know once it's decided.`,
+        categoryIcon: "refund",
+      };
+    }
+    case "open-refund-request": {
+      const data = notification.data;
+      return {
+        title: `${data.buyerName} requested a ${formatPrice(data.amount)} refund for ${data.courseTitle}`,
+        snippet: `“${data.reason}”`,
+        categoryIcon: "refund",
+      };
+    }
+    case "refund-request-approved": {
+      const data = notification.data;
+      const note = data.decisionNote ? ` “${data.decisionNote}”` : "";
+      return {
+        title: `Your refund for ${data.courseTitle} was approved`,
+        snippet: `${formatPrice(data.amount)} for Purchase #${data.purchaseId} is on its way back to you.${note}`,
+        categoryIcon: "refund",
+      };
+    }
+    case "refund-request-declined": {
+      const data = notification.data;
+      return {
+        title: `Your refund request for ${data.courseTitle} was declined`,
+        snippet: `“${data.decisionNote}” You can raise a new refund request.`,
+        categoryIcon: "refund",
       };
     }
     case "seat-claimed": {
