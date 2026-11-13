@@ -44,6 +44,7 @@ interface SidebarProps {
   // PROTOTYPE slots for the Notification Feed prototype (#16)
   headerSlot?: React.ReactNode;
   navSlot?: React.ReactNode;
+  footerSlot?: React.ReactNode;
 }
 
 interface NavItem {
@@ -122,6 +123,7 @@ export function Sidebar({
   isTeamAdmin = false,
   headerSlot,
   navSlot,
+  footerSlot,
 }: SidebarProps) {
   const currentUserRole = currentUser?.role ?? null;
   const [isDark, setIsDark] = useState(false);
@@ -249,6 +251,7 @@ export function Sidebar({
                 {currentUser.role}
               </div>
             </div>
+            {footerSlot}
             <NavLink
               to="/settings"
               title="Settings"

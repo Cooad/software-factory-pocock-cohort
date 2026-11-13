@@ -11,6 +11,7 @@ import {
   VariantCNavItem,
   VariantCToasts,
   PrototypeSeedPanel,
+  useToastToggle,
 } from "~/components/prototype-notification-feed";
 import { PrototypeSwitcher } from "~/components/prototype-switcher";
 import type { Route } from "./+types/layout.app";
@@ -252,6 +253,7 @@ export default function AppLayout({ loaderData }: Route.ComponentProps) {
   const feed = useKnockFeed(knock);
   const variant = useFeedVariant();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [toasts, setToasts] = useToastToggle();
 
   return (
     <div className="flex h-screen overflow-hidden">
@@ -259,7 +261,8 @@ export default function AppLayout({ loaderData }: Route.ComponentProps) {
         currentUser={currentUser}
         recentCourses={recentCourses}
         isTeamAdmin={userIsTeamAdmin}
-        headerSlot={knock && variant === "A" ? <VariantABell feed={feed} /> : null}
+        headerSlot={knock && variant === "A" ? <VariantABell feed={feed} placement="top" /> : null}
+        footerSlot={knock && variant === "A2" ? <VariantABell feed={feed} placement="bottom" /> : null}
         navSlot={
           !knock ? null : variant === "B" ? (
             <VariantBNavItem feed={feed} onOpen={() => setDrawerOpen(true)} />
@@ -274,8 +277,10 @@ export default function AppLayout({ loaderData }: Route.ComponentProps) {
       {knock && variant === "B" && (
         <VariantBDrawer feed={feed} open={drawerOpen} onClose={() => setDrawerOpen(false)} />
       )}
-      {knock && variant === "C" && <VariantCToasts feed={feed} />}
-      {knock && <PrototypeSeedPanel kinds={sampleKinds} feed={feed} />}
+      {knock && (variant === "C" || toasts) && <VariantCToasts feed={feed} />}
+      {knock && (
+        <PrototypeSeedPanel kinds={sampleKinds} feed={feed} toasts={toasts} setToasts={setToasts} />
+      )}
       <PrototypeSwitcher variants={FEED_VARIANTS} current={variant} />
       <DevUI
         users={users}

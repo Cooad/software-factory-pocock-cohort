@@ -43,10 +43,10 @@ export interface FeedItem {
   readAt: string | null;
 }
 
+// Round 2: user picked A. B and C are off the switcher (still reachable via ?variant=B|C).
 export const FEED_VARIANTS = [
-  { key: "A", name: "Bell popover" },
-  { key: "B", name: "Nav drawer" },
-  { key: "C", name: "Inbox page" },
+  { key: "A", name: "Bell top-left" },
+  { key: "A2", name: "Bell bottom-left" },
 ];
 
 // ---------------------------------------------------------------- data
@@ -226,15 +226,19 @@ function Empty() {
 }
 
 // ---------------------------------------------------------------- Variant A: Bell popover
+// Round 2 (user feedback): badge = UNREAD number; per-row "Read" button that
+// doesn't navigate; header action is "Mark all as read" while anything is
+// unread, then "Clear" (archives everything). Placement: top-left (A) or
+// bottom-left in the user row (A2).
 
-export function VariantABell({ feed }: { feed: Feed }) {
+export function VariantABell({ feed, placement = "top" }: { feed: Feed; placement?: "top" | "bottom" }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const openItem = useOpenItem(feed, () => setOpen(false));
+  const unreadIds = feed.items.filter((i) => !i.readAt).map((i) => i.id);
 
   useEffect(() => {
     if (!open) return;
-    // Opening the feed marks everything visible as SEEN → badge clears.
     feed.setStatus("seen", feed.items.filter((i) => !i.seenAt).map((i) => i.id));
     function onDown(e: MouseEvent) {
       if (!ref.current?.contains(e.target as Node)) setOpen(false);
@@ -244,40 +248,57 @@ export function VariantABell({ feed }: { feed: Feed }) {
   }, [open]);
 
   return (
-    <div ref={ref} className="relative ml-auto">
+    <div ref={ref} className={cn("relative", placement === "top" && "ml-auto")}>
       <button
         onClick={() => setOpen((o) => !o)}
-        className="relative rounded-md p-1.5 text-sidebar-foreground/70 hover:bg-sidebar-accent"
+        className={cn(
+          "relative rounded-md text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+          placement === "top" ? "p-1.5" : "p-1"
+        )}
         title="Notifications"
       >
-        <Bell className="size-5" />
-        {feed.meta.unseen > 0 && (
-          <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold text-white">
-            {feed.meta.unseen > 9 ? "9+" : feed.meta.unseen}
+        <Bell className={placement === "top" ? "size-5" : "size-4"} />
+        {feed.meta.unread > 0 && (
+          <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold text-white">
+            {feed.meta.unread > 9 ? "9+" : feed.meta.unread}
           </span>
         )}
       </button>
       {open && (
-        <div className="absolute left-full top-0 z-50 ml-3 w-96 overflow-hidden rounded-lg border bg-popover text-popover-foreground shadow-2xl">
+        <div
+          className={cn(
+            "absolute left-full z-50 ml-3 w-96 overflow-hidden rounded-lg border bg-popover text-popover-foreground shadow-2xl",
+            placement === "top" ? "top-0" : "bottom-0"
+          )}
+        >
           <div className="flex items-center justify-between border-b px-4 py-3">
             <span className="font-semibold">Notifications</span>
-            <button
-              className="flex items-center gap-1 text-xs text-primary hover:underline disabled:opacity-40"
-              disabled={feed.meta.unread === 0}
-              onClick={() => feed.setStatus("read", feed.items.filter((i) => !i.readAt).map((i) => i.id))}
-            >
-              <CheckCheck className="size-3.5" /> Mark all as read
-            </button>
+            {unreadIds.length > 0 ? (
+              <button
+                className="flex items-center gap-1 text-xs text-primary hover:underline"
+                onClick={() => feed.setStatus("read", unreadIds)}
+              >
+                <CheckCheck className="size-3.5" /> Mark all as read
+              </button>
+            ) : feed.items.length > 0 ? (
+              <button
+                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground hover:underline"
+                onClick={() => feed.setStatus("archived", feed.items.map((i) => i.id))}
+              >
+                <Archive className="size-3.5" /> Clear
+              </button>
+            ) : null}
           </div>
           <ErrorNote feed={feed} />
           <div className="max-h-[28rem] overflow-y-auto">
             {feed.items.length === 0 && <Empty />}
             {feed.items.map((item) => (
-              <button
+              <div
                 key={item.id}
+                role="button"
                 onClick={() => openItem(item)}
                 className={cn(
-                  "flex w-full items-start gap-3 border-b px-4 py-3 text-left text-sm last:border-b-0 hover:bg-accent",
+                  "flex w-full cursor-pointer items-start gap-3 border-b px-4 py-3 text-left text-sm last:border-b-0 hover:bg-accent",
                   !item.readAt && "bg-primary/5"
                 )}
               >
@@ -288,8 +309,19 @@ export function VariantABell({ feed }: { feed: Feed }) {
                   </div>
                   <div className="mt-0.5 text-xs text-muted-foreground">{ago(item.insertedAt)}</div>
                 </div>
-                {!item.readAt && <span className="mt-1.5 size-2 shrink-0 rounded-full bg-blue-600" />}
-              </button>
+                {!item.readAt && (
+                  <button
+                    title="Mark as read without opening"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      feed.setStatus("read", [item.id]);
+                    }}
+                    className="flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-xs text-muted-foreground hover:border-primary hover:text-primary"
+                  >
+                    <Check className="size-3" /> Read
+                  </button>
+                )}
+              </div>
             ))}
           </div>
         </div>
@@ -297,6 +329,7 @@ export function VariantABell({ feed }: { feed: Feed }) {
     </div>
   );
 }
+
 
 // ---------------------------------------------------------------- Variant B: Nav drawer
 
@@ -524,7 +557,27 @@ const KIND_LABELS: Record<string, string> = {
   "seat-claimed": "#6 Seat claimed",
 };
 
-export function PrototypeSeedPanel({ kinds, feed }: { kinds: string[]; feed: Feed }) {
+export function useToastToggle() {
+  const [on, setOn] = useState(false);
+  useEffect(() => setOn(localStorage.getItem("prototype-feed-toasts") === "1"), []);
+  const set = (v: boolean) => {
+    localStorage.setItem("prototype-feed-toasts", v ? "1" : "0");
+    setOn(v);
+  };
+  return [on, set] as const;
+}
+
+export function PrototypeSeedPanel({
+  kinds,
+  feed,
+  toasts,
+  setToasts,
+}: {
+  kinds: string[];
+  feed: Feed;
+  toasts: boolean;
+  setToasts: (v: boolean) => void;
+}) {
   const fetcher = useFetcher<{ ok: boolean; error: string | null }>();
   useEffect(() => {
     if (fetcher.state === "idle" && fetcher.data?.ok) setTimeout(feed.refresh, 1500);
@@ -543,6 +596,10 @@ export function PrototypeSeedPanel({ kinds, feed }: { kinds: string[]; feed: Fee
         <button onClick={() => send(kinds)} className="rounded bg-fuchsia-600 px-2 py-1 text-white">
           Send one of each
         </button>
+        <label className="mt-1 flex cursor-pointer items-center gap-2 px-2">
+          <input type="checkbox" checked={toasts} onChange={(e) => setToasts(e.target.checked)} />
+          Toast new arrivals
+        </label>
       </div>
       {fetcher.state !== "idle" && <div className="mt-1 text-muted-foreground">Sending…</div>}
       {fetcher.data?.error && <div className="mt-1 break-words text-destructive">{fetcher.data.error}</div>}
