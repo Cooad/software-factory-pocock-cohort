@@ -1,0 +1,19 @@
+{
+  "name": "Discussion Question",
+  "description": "Notification 6: tells the course's Instructor a Discussion Question was asked. Cadence writes the row text from the trigger data; this body is only Knock's fallback.",
+  "categories": ["discussion-questions"],
+  "steps": [
+    {
+      "ref": "feed",
+      "type": "channel",
+      "channel_type": "in_app_feed",
+      "channel_key": "cadence-feed",
+      "template": {
+        "action_url": "{{ data.url }}",
+        "markdown_body@": "feed/markdown_body.md"
+      }
+    }
+  ],
+  "trigger_frequency": "every_trigger",
+  "$schema": "https://schemas.knock.app/cli/workflow.json"
+}

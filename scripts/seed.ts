@@ -14,6 +14,11 @@ import {
   QuestionType,
   TeamMemberRole,
 } from "../app/db/schema";
+import {
+  defaultNotifier,
+  knockConfigFromEnv,
+} from "../app/lib/notifications.server";
+import { syncAllUsers } from "../app/lib/users.server";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -2851,6 +2856,15 @@ This course is still in draft while the cluster examples are rewritten against t
   );
   console.log(
     `  Teams: ${countRows(schema.teams)}, coupons: ${countRows(schema.coupons)} (${countRows(schema.coupons, isNotNull(schema.coupons.redeemedByUserId))} redeemed)`
+  );
+
+  // ─── Notifications user sync ───
+  // Identifies every user to Knock and gives defaults to those without
+  // preferences. Without a Knock key this is the silent no-op adapter.
+  // Failures are logged and never fail the seed.
+  const notifications = await syncAllUsers(db, defaultNotifier());
+  console.log(
+    `  Notifications: synced ${notifications.synced} users${knockConfigFromEnv() ? " to Knock" : " (no Knock key, nothing sent)"}, ${notifications.failed} failed`
   );
 }
 
