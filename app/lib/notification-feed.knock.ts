@@ -27,6 +27,7 @@ const PAGE_SIZE = 20;
 const KIND_BY_WORKFLOW: Record<string, NotificationKind> = {
   "discussion-reply": "discussion-reply",
   "discussion-question": "discussion-question",
+  "seat-claimed": "seat-claimed",
 };
 
 function toNotification(item: FeedItem): FeedNotification | null {

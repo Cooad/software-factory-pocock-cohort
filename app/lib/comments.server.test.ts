@@ -591,9 +591,9 @@ describe("Archiving Notifications when a comment is deleted", () => {
     await deleteComment(db, notifier, question.id, other.id, false, LATER);
 
     expect(notifier.feed(base.instructor.id)).toEqual([]);
-    expect(
-      notifier.feed(other.id).map((t) => [t.kind, t.data.commentId])
-    ).toEqual([["discussion-reply", reply.id]]);
+    expect(notifier.feed(other.id).map((t) => t.idempotencyKey)).toEqual([
+      `discussion-reply:${reply.id}`,
+    ]);
   });
 
   it("leaves Notifications alone when deleting fails", async () => {
