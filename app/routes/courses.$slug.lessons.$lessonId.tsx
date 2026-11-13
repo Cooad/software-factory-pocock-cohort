@@ -10,9 +10,9 @@ import {
   type RenderedComment,
 } from "~/components/comment-thread";
 import {
-  assertValidCommentBody,
   createComment,
   deleteComment,
+  editComment,
 } from "~/lib/comments.server";
 import { defaultNotifier } from "~/lib/notifications.server";
 import { db } from "~/db";
@@ -391,28 +391,6 @@ function getLessonThread(lessonId: number): ThreadComment[] {
 
   // A deleted question with no replies left has nothing worth showing.
   return topLevel.filter((c) => !c.deleted || c.replies.length > 0);
-}
-
-function updateComment(commentId: number, userId: number, body: string) {
-  const trimmed = assertValidCommentBody(body);
-
-  const existing = getCommentById(commentId);
-  if (!existing) {
-    throw new Error("Comment not found");
-  }
-  if (existing.deletedAt !== null) {
-    throw new Error("Comment has been deleted");
-  }
-  if (existing.userId !== userId) {
-    throw new Error("You can only edit your own comments");
-  }
-
-  return db
-    .update(comments)
-    .set({ body: trimmed, editedAt: new Date().toISOString() })
-    .where(eq(comments.id, commentId))
-    .returning()
-    .get();
 }
 
 function getQuizByLessonId(lessonId: number) {
@@ -862,7 +840,13 @@ export async function action({ params, request }: Route.ActionArgs) {
         if (!existing || existing.lessonId !== lessonId) {
           throw data("Comment not found", { status: 404 });
         }
-        updateComment(parsed.data.commentId, currentUserId, parsed.data.body);
+        editComment(
+          db,
+          parsed.data.commentId,
+          currentUserId,
+          parsed.data.body,
+          new Date()
+        );
         return { ok: true };
       }
 
@@ -874,8 +858,9 @@ export async function action({ params, request }: Route.ActionArgs) {
       if (!existing || existing.lessonId !== lessonId) {
         throw data("Comment not found", { status: 404 });
       }
-      deleteComment(
+      await deleteComment(
         db,
+        defaultNotifier(),
         parsed.data.commentId,
         currentUserId,
         access.isStaff,

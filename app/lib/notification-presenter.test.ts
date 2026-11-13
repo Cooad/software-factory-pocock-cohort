@@ -134,3 +134,42 @@ describe("presentNotification: Seat claimed", () => {
     expect(presentNotification(seatClaimed(3), NOW).href).toBe("/team");
   });
 });
+
+describe("presentNotification: Discussion Question", () => {
+  const question = {
+    id: "msg_2",
+    kind: "discussion-question",
+    actor: { name: "Grace Hopper", avatarUrl: null },
+    insertedAt: "2026-10-06T10:00:00.000Z",
+    seenAt: null,
+    readAt: null,
+    data: {
+      commentId: 9,
+      courseSlug: "intro-to-js",
+      courseTitle: "Intro to JS",
+      lessonId: 3,
+      lessonTitle: "Closures",
+      snippet: "How do closures work?",
+    },
+  } as FeedNotification;
+
+  it("names who asked and the lesson, and quotes the question", () => {
+    const row = presentNotification(question, NOW);
+
+    expect(row).toMatchObject({
+      id: "msg_2",
+      title: "Grace Hopper asked a question in Closures",
+      snippet: "“How do closures work?”",
+      categoryIcon: "discussion",
+      avatar: { kind: "sender", name: "Grace Hopper", avatarUrl: null },
+      unread: true,
+      timeAgo: "2h",
+    });
+  });
+
+  it("links to the question on the lesson", () => {
+    const row = presentNotification(question, NOW);
+
+    expect(row.href).toBe("/courses/intro-to-js/lessons/3#comment-9");
+  });
+});

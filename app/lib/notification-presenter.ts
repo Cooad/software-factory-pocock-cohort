@@ -55,6 +55,10 @@ export function notificationHref(notification: KindAndData): string | null {
       const data = notification.data;
       return `/courses/${data.courseSlug}/lessons/${data.lessonId}#comment-${data.commentId}`;
     }
+    case "discussion-question": {
+      const data = notification.data;
+      return `/courses/${data.courseSlug}/lessons/${data.lessonId}#comment-${data.commentId}`;
+    }
     case "seat-claimed":
       return "/team";
     default: {
@@ -72,6 +76,14 @@ function describe(notification: FeedNotification, actor: string): Description {
       const data = notification.data;
       return {
         title: `${actor} replied to your question in ${data.lessonTitle}`,
+        snippet: `“${data.snippet}”`,
+        categoryIcon: "discussion",
+      };
+    }
+    case "discussion-question": {
+      const data = notification.data;
+      return {
+        title: `${actor} asked a question in ${data.lessonTitle}`,
         snippet: `“${data.snippet}”`,
         categoryIcon: "discussion",
       };
