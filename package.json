@@ -19,6 +19,9 @@
     "db:seed": "tsx scripts/seed.ts",
     "seed-wayfinder-issues": "bash scripts/seed-wayfinder-issues.sh",
     "db:migrate": "drizzle-kit migrate",
+    "knock:validate": "npx @knocklabs/cli@1.5.2 workflow validate --all --workflows-dir knock/workflows --environment development",
+    "knock:push": "npx @knocklabs/cli@1.5.2 workflow push --all --workflows-dir knock/workflows --environment development --commit --commit-message \"Push Cadence workflows from the repo\"",
+    "knock:check": "bash scripts/knock-check-workflows.sh",
     "loc": "git ls-files | grep -vE '(lock|.db|_snapshot.json)' | xargs wc -l"
   },
   "dependencies": {
