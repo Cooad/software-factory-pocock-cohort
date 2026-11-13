@@ -1,5 +1,12 @@
-import Knock, { signUserToken } from "@knocklabs/node";
+import Knock, { NotFoundError, signUserToken } from "@knocklabs/node";
 import type { NotificationKind } from "~/lib/notifications";
+import {
+  NOTIFICATION_CHANNELS,
+  PREFERENCE_CATEGORIES,
+  type NotificationChannel,
+  type NotificationPreferences,
+  type PreferenceCategory,
+} from "~/lib/notification-preferences";
 import { notificationHref } from "~/lib/notification-presenter";
 import type {
   KnockConfig,
@@ -17,7 +24,67 @@ const WORKFLOW_KEY: Record<NotificationKind, string> = {
   "discussion-reply": "discussion-reply",
 };
 
+/** Cadence preference category → Knock category key (see knock/workflows). */
+const CATEGORY_KEY: Record<PreferenceCategory, string> = {
+  "refund-request-updates": "refund-request-updates",
+  "open-refund-requests": "open-refund-requests",
+  "seat-claims": "seat-claims",
+  enrollments: "enrollments",
+  "discussion-questions": "discussion-questions",
+  "discussion-replies": "discussion-replies",
+};
+
+/** Cadence channel → Knock channel type. */
+const CHANNEL_TYPE: Record<NotificationChannel, "in_app_feed"> = {
+  feed: "in_app_feed",
+};
+
+/** Cadence uses Knock's per-user preference set called "default". */
+const PREFERENCE_SET_ID = "default";
+
 const USER_TOKEN_TTL_SECONDS = 60 * 60;
+
+type KnockCategories = NonNullable<
+  Awaited<ReturnType<Knock["users"]["getPreferences"]>>["categories"]
+>;
+
+function toKnockCategories(preferences: NotificationPreferences) {
+  return Object.fromEntries(
+    PREFERENCE_CATEGORIES.map((category) => [
+      CATEGORY_KEY[category],
+      {
+        channel_types: Object.fromEntries(
+          NOTIFICATION_CHANNELS.map((channel) => [
+            CHANNEL_TYPE[channel],
+            preferences[category][channel],
+          ])
+        ),
+      },
+    ])
+  );
+}
+
+// Knock delivers when a category or channel type is missing from the set, so
+// a missing entry reads as on.
+function fromKnockCategories(
+  categories: KnockCategories
+): NotificationPreferences {
+  return Object.fromEntries(
+    PREFERENCE_CATEGORIES.map((category) => {
+      const setting = categories[CATEGORY_KEY[category]];
+      return [
+        category,
+        Object.fromEntries(
+          NOTIFICATION_CHANNELS.map((channel) => {
+            if (typeof setting === "boolean") return [channel, setting];
+            const value = setting?.channel_types?.[CHANNEL_TYPE[channel]];
+            return [channel, typeof value === "boolean" ? value : true];
+          })
+        ),
+      ];
+    })
+  ) as NotificationPreferences;
+}
 
 function toKnockUser(person: NotificationPerson) {
   return {
@@ -58,6 +125,34 @@ export function knockNotifier(config: KnockConfig): Notifier {
         publicApiKey,
         feedChannelId,
       };
+    },
+
+    async identifyUser(person) {
+      const { id, ...properties } = toKnockUser(person);
+      await knock.users.update(id, properties);
+    },
+
+    async getPreferences(userId) {
+      try {
+        const set = await knock.users.getPreferences(
+          String(userId),
+          PREFERENCE_SET_ID
+        );
+        // Knock answers with an all-null "default" set for a user who has
+        // never had preferences written, so no categories means none.
+        const categories = set.categories;
+        if (!categories || Object.keys(categories).length === 0) return null;
+        return fromKnockCategories(categories);
+      } catch (error) {
+        if (error instanceof NotFoundError) return null; // never identified
+        throw error;
+      }
+    },
+
+    async setPreferences(userId, preferences) {
+      await knock.users.setPreferences(String(userId), PREFERENCE_SET_ID, {
+        categories: toKnockCategories(preferences),
+      });
     },
   };
 }
