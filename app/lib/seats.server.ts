@@ -142,7 +142,13 @@ export async function claimSeat(
     };
   }
 
-  const enrolled = createEnrollment(db, userId, seat.courseId, now);
+  const enrolled = await createEnrollment(
+    db,
+    notifier,
+    userId,
+    seat.courseId,
+    now
+  );
   if (!enrolled.ok) return enrolled;
 
   const claimed = db

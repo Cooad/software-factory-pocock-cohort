@@ -41,6 +41,11 @@ function addLearner(name: string) {
     .get();
 }
 
+/** A claim also enrolls, which sends New Enrollment; these tests are about Seats. */
+function seatClaimedTriggers() {
+  return notifier.triggers.filter((t) => t.kind === "seat-claimed");
+}
+
 function buySeats(seats: number, country: string | null = "PL") {
   const team = db.insert(schema.teams).values({}).returning().get();
   const purchase = db
@@ -158,7 +163,7 @@ describe("claiming a Seat", () => {
 
   it("refuses a Student who is already enrolled, leaving the Seat unclaimed", async () => {
     const { seats } = buySeats(2);
-    createEnrollment(db, base.user.id, base.course.id, NOW);
+    await createEnrollment(db, notifier, base.user.id, base.course.id, NOW);
 
     const refused = await claimSeat(db, notifier, seats[0].code, base.user.id, "PL", NOW);
     const claimedByAnother = await claimSeat(db, notifier, seats[0].code, addLearner("Ben").id, "PL", NOW);
@@ -172,7 +177,7 @@ describe("claiming a Seat", () => {
 
   it("tells an already-enrolled Student so, even from another country", async () => {
     const { seats } = buySeats(2, "PL");
-    createEnrollment(db, base.user.id, base.course.id, NOW);
+    await createEnrollment(db, notifier, base.user.id, base.course.id, NOW);
 
     const result = await claimSeat(db, notifier, seats[0].code, base.user.id, "DE", NOW);
 
@@ -196,7 +201,7 @@ describe("claiming a Seat: the Seat claimed Notification", () => {
 
     await claimSeat(db, notifier, seats[0].code, base.user.id, "PL", NOW);
 
-    expect(notifier.triggers).toEqual([
+    expect(seatClaimedTriggers()).toEqual([
       {
         kind: "seat-claimed",
         recipients: [
@@ -232,7 +237,7 @@ describe("claiming a Seat: the Seat claimed Notification", () => {
     await claimSeat(db, notifier, seats[1].code, addLearner("Ben").id, "PL", NOW);
 
     expect(
-      notifier.triggers.map((t) => [t.idempotencyKey, t.data])
+      seatClaimedTriggers().map((t) => [t.idempotencyKey, t.data])
     ).toMatchObject([
       [`seat-claimed:${seats[0].id}`, { seatsLeft: 1 }],
       [`seat-claimed:${seats[1].id}`, { seatsLeft: 0 }],

@@ -56,6 +56,19 @@ export type SeatClaimedData = {
   seatsLeft: number;
 };
 
+/**
+ * Data for Notification 5, sent to a course's Instructor when a Student enrolls
+ * (from an Individual Purchase or a Claimed Seat, or a Lapsed Student enrolling
+ * again). The Student is the actor. Deliberately no `commentId`: archiving on
+ * comment delete filters on that field.
+ */
+export type NewEnrollmentData = {
+  enrollmentId: number;
+  courseId: number;
+  courseSlug: string;
+  courseTitle: string;
+};
+
 /** What every Refund Request Notification says about the Purchase. */
 type RefundRequestFacts = {
   refundRequestId: number;
@@ -90,6 +103,7 @@ export type NotificationDataByKind = {
   "discussion-reply": DiscussionReplyData;
   "discussion-question": DiscussionQuestionData;
   "seat-claimed": SeatClaimedData;
+  "new-enrollment": NewEnrollmentData;
   "refund-request-confirmation": RefundRequestConfirmationData;
   "open-refund-request": OpenRefundRequestData;
   "refund-request-approved": RefundRequestApprovedData;
