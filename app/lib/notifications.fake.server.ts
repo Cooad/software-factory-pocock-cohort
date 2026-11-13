@@ -1,4 +1,7 @@
-import type { NotificationPreferences } from "~/lib/notification-preferences";
+import {
+  PREFERENCE_CATEGORY_BY_KIND,
+  type NotificationPreferences,
+} from "~/lib/notification-preferences";
 import type {
   NotificationPerson,
   NotificationTrigger,
@@ -9,7 +12,9 @@ import type {
 // Records every trigger, every identified user and every preference write, and
 // keeps preference sets in memory. Call `failWith(error)` to make every call
 // throw, to check that domain actions survive a vendor outage. `feed(userId)`
-// is what that user's feed would show: their triggers, minus archived ones.
+// is what that user's feed would show: their triggers, minus archived ones and
+// minus those whose category they've turned off (like Knock, a user with no
+// stored preferences gets everything).
 
 export type FakeNotifier = Notifier & {
   triggers: NotificationTrigger[];
@@ -43,7 +48,9 @@ export function createFakeNotifier(): FakeNotifier {
       return triggers.filter(
         (t) =>
           t.recipients.some((r) => r.id === userId) &&
-          !archivedCommentIds.some((id) => causedByComment(t, id))
+          !archivedCommentIds.some((id) => causedByComment(t, id)) &&
+          (preferencesByUser.get(userId)?.[PREFERENCE_CATEGORY_BY_KIND[t.kind]]
+            .feed ?? true)
       );
     },
     failWith(error) {

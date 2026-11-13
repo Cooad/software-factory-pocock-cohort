@@ -287,3 +287,44 @@ describe("presentNotification: Refund Requests", () => {
     });
   });
 });
+
+function newEnrollment(
+  overrides: Partial<FeedNotification> = {}
+): FeedNotification {
+  return {
+    id: "msg_5",
+    kind: "new-enrollment",
+    actor: { name: "Ben Student", avatarUrl: "https://example.com/ben.png" },
+    insertedAt: "2026-10-06T11:30:00.000Z",
+    seenAt: null,
+    readAt: null,
+    data: {
+      enrollmentId: 31,
+      courseId: 4,
+      courseSlug: "intro-to-js",
+      courseTitle: "Intro to JS",
+    },
+    ...overrides,
+  } as FeedNotification;
+}
+
+describe("presentNotification: New Enrollment", () => {
+  it("says which Student enrolled in which course, from the Student, with the Enrollment icon", () => {
+    const row = presentNotification(newEnrollment(), NOW);
+
+    expect(row).toEqual({
+      id: "msg_5",
+      title: "Ben Student enrolled in Intro to JS",
+      snippet: null,
+      categoryIcon: "enrollment",
+      avatar: {
+        kind: "sender",
+        name: "Ben Student",
+        avatarUrl: "https://example.com/ben.png",
+      },
+      href: "/instructor/4/students",
+      unread: true,
+      timeAgo: "30m",
+    });
+  });
+});

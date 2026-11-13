@@ -59,6 +59,9 @@ export function notificationHref(notification: KindAndData): string | null {
     }
     case "seat-claimed":
       return "/team";
+    // The course's Students list, where the new Student now appears.
+    case "new-enrollment":
+      return `/instructor/${notification.data.courseId}/students`;
     // Only marks it read: the buyer has nothing to do while it is reviewed.
     case "refund-request-confirmation":
       return null;
@@ -138,6 +141,14 @@ function describe(notification: FeedNotification, actor: string): Description {
             ? "No Seats left"
             : `${left} ${left === 1 ? "Seat" : "Seats"} left`,
         categoryIcon: "team",
+      };
+    }
+    case "new-enrollment": {
+      const data = notification.data;
+      return {
+        title: `${actor} enrolled in ${data.courseTitle}`,
+        snippet: null,
+        categoryIcon: "enrollment",
       };
     }
     default: {
