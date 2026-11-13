@@ -9,6 +9,7 @@ import { parseParams, parseFormData } from "~/lib/validation";
 import { getSeatAvailability } from "~/lib/refunds.server";
 import { isEnrolled } from "~/lib/enrollments.server";
 import { claimSeat, SEAT_ON_HOLD, SEAT_REFUNDED } from "~/lib/seats.server";
+import { defaultNotifier } from "~/lib/notifications.server";
 import { Card, CardContent } from "~/components/ui/card";
 import { Button } from "~/components/ui/button";
 import { Ticket, AlertCircle, CheckCircle2, Globe } from "lucide-react";
@@ -111,8 +112,9 @@ export async function action({ params, request }: Route.ActionArgs) {
   }
 
   const userCountry = await resolveCountry(request);
-  const result = claimSeat(
+  const result = await claimSeat(
     db,
+    defaultNotifier(),
     code,
     currentUserId,
     userCountry ?? "",

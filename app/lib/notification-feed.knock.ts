@@ -26,6 +26,7 @@ const PAGE_SIZE = 20;
 /** Knock workflow key -> Cadence Notification kind. Unknown keys are hidden. */
 const KIND_BY_WORKFLOW: Record<string, NotificationKind> = {
   "discussion-reply": "discussion-reply",
+  "seat-claimed": "seat-claimed",
 };
 
 function toNotification(item: FeedItem): FeedNotification | null {
