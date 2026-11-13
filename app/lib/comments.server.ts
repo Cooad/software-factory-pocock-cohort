@@ -1,15 +1,23 @@
 import { eq } from "drizzle-orm";
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import * as schema from "~/db/schema";
-import { comments, courses, lessons, modules } from "~/db/schema";
+import { comments, courses, lessons, modules, users } from "~/db/schema";
 import { MAX_COMMENT_LENGTH, MIN_COMMENT_LENGTH } from "~/lib/comments";
+import { toSnippet } from "~/lib/notifications";
+import {
+  notifySafely,
+  type NotificationPerson,
+  type Notifier,
+} from "~/lib/notifications.server";
 
 // ─── Comments ───
 // Writing Discussion comments: creating a Discussion Question or Discussion
 // Reply, and soft-deleting a comment. See GLOSSARY.md for the language.
 //
 // Every function takes the database first and `now` last, so tests can hand in
-// an in-memory database and a fixed clock. Failures are thrown as Errors whose
+// an in-memory database and a fixed clock. Functions that send Notifications
+// take the `Notifier` port second; they send after the write and never fail
+// because of it. Failures are thrown as Errors whose
 // message is safe to show the user. Uses positional parameters (project
 // convention).
 
@@ -33,6 +41,67 @@ function lessonExists(db: Db, lessonId: number) {
   );
 }
 
+function getPerson(db: Db, userId: number): NotificationPerson | undefined {
+  return db
+    .select({
+      id: users.id,
+      name: users.name,
+      email: users.email,
+      avatarUrl: users.avatarUrl,
+    })
+    .from(users)
+    .where(eq(users.id, userId))
+    .get();
+}
+
+function getLessonContext(db: Db, lessonId: number) {
+  return db
+    .select({
+      lessonTitle: lessons.title,
+      courseSlug: courses.slug,
+      courseTitle: courses.title,
+    })
+    .from(lessons)
+    .innerJoin(modules, eq(lessons.moduleId, modules.id))
+    .innerJoin(courses, eq(modules.courseId, courses.id))
+    .where(eq(lessons.id, lessonId))
+    .get();
+}
+
+/**
+ * Notification 7: tells the Discussion Question's author that someone else
+ * replied. Nobody else in the thread hears about it.
+ */
+async function notifyDiscussionReply(
+  db: Db,
+  notifier: Notifier,
+  reply: Comment,
+  question: Comment
+) {
+  if (question.userId === reply.userId) return;
+
+  const recipient = getPerson(db, question.userId);
+  const actor = getPerson(db, reply.userId);
+  const lesson = getLessonContext(db, reply.lessonId);
+  if (!recipient || !actor || !lesson) return;
+
+  await notifySafely(notifier, {
+    kind: "discussion-reply",
+    recipients: [recipient],
+    actor,
+    data: {
+      commentId: reply.id,
+      questionId: question.id,
+      courseSlug: lesson.courseSlug,
+      courseTitle: lesson.courseTitle,
+      lessonId: reply.lessonId,
+      lessonTitle: lesson.lessonTitle,
+      snippet: toSnippet(reply.body),
+    },
+    idempotencyKey: `discussion-reply:${reply.id}`,
+  });
+}
+
 /** Trims a comment body, throwing if it is empty or too long. */
 export function assertValidCommentBody(body: string) {
   const trimmed = body.trim();
@@ -51,23 +120,27 @@ export function assertValidCommentBody(body: string) {
  * Creates a Discussion Question (`parentId` null) or a Discussion Reply to one.
  * Replies are one level deep: the parent must be top-level and on the same
  * lesson.
+ *
+ * A Discussion Reply notifies the question's author (unless they wrote it).
  */
-export function createComment(
+export async function createComment(
   db: Db,
+  notifier: Notifier,
   authorId: number,
   lessonId: number,
   parentId: number | null,
   body: string,
   now: Date
-): Comment {
+): Promise<Comment> {
   const trimmed = assertValidCommentBody(body);
 
   if (!lessonExists(db, lessonId)) {
     throw new Error("Lesson not found");
   }
 
+  let parent: Comment | undefined;
   if (parentId !== null) {
-    const parent = getComment(db, parentId);
+    parent = getComment(db, parentId);
     if (!parent) {
       throw new Error("Parent comment not found");
     }
@@ -79,7 +152,7 @@ export function createComment(
     }
   }
 
-  return db
+  const comment = db
     .insert(comments)
     .values({
       userId: authorId,
@@ -90,6 +163,12 @@ export function createComment(
     })
     .returning()
     .get();
+
+  if (parent) {
+    await notifyDiscussionReply(db, notifier, comment, parent);
+  }
+
+  return comment;
 }
 
 /**
