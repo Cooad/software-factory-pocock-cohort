@@ -128,7 +128,8 @@ export function knockNotifier(config: KnockConfig): Notifier {
     async archiveCausedByComment(commentId) {
       // List Messages' `trigger_data` filter matches the data each trigger
       // carried, so no lookup table is needed (checked against Development:
-      // numeric values match exactly). See notes.md for spec #29, "#35".
+      // numeric values match exactly). It matches top-level keys, so only
+      // kinds about a comment may carry `commentId`.
       const messageIds: string[] = [];
       for await (const message of knock.messages.list({
         trigger_data: JSON.stringify({ commentId }),

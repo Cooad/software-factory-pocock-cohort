@@ -4,9 +4,17 @@
 // renders them through the presenter). Nothing here knows about Knock: the
 // adapters map these names to the vendor's keys.
 //
-// Adding a kind: add it to `NotificationDataByKind` with its data shape, then
-// follow the compiler (presenter, Knock adapters' key tables). See
-// notes.md for spec #29.
+// Adding a kind:
+// 1. Add its data type to `NotificationDataByKind` and its schema to
+//    `NOTIFICATION_SCHEMAS` below. Keep the data flat scalars, and only give it
+//    a `commentId` if it is about a comment: archiving on comment delete finds
+//    messages by that field.
+// 2. Follow the compiler: its entry in `PRESENTERS` (notification-presenter.ts),
+//    `WORKFLOW_KEY_BY_KIND` (notifications.knock.ts) and
+//    `PREFERENCE_CATEGORY_BY_KIND` (notification-preferences.ts).
+// 3. Add its workflow folder to `knock/workflows/` with that category (see
+//    knock/README.md); `knock-workflows.test.ts` checks they match.
+// 4. Trigger it from its service with `notifySafely` and an idempotency key.
 
 import { z } from "zod";
 
