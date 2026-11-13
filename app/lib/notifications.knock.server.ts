@@ -15,9 +15,14 @@ import type {
 
 const WORKFLOW_KEY: Record<NotificationKind, string> = {
   "discussion-reply": "discussion-reply",
+  "discussion-question": "discussion-question",
+  "seat-claimed": "seat-claimed",
 };
 
 const USER_TOKEN_TTL_SECONDS = 60 * 60;
+
+/** Knock's limit on `message_ids` in one batch call. */
+const BATCH_SIZE = 50;
 
 function toKnockUser(person: NotificationPerson) {
   return {
@@ -44,6 +49,24 @@ export function knockNotifier(config: KnockConfig): Notifier {
         },
         { idempotencyKey: notification.idempotencyKey }
       );
+    },
+
+    async archiveCausedByComment(commentId) {
+      // List Messages' `trigger_data` filter matches the data each trigger
+      // carried, so no lookup table is needed (checked against Development:
+      // numeric values match exactly). See notes.md for spec #29, "#35".
+      const messageIds: string[] = [];
+      for await (const message of knock.messages.list({
+        trigger_data: JSON.stringify({ commentId }),
+      })) {
+        if (!message.archived_at) messageIds.push(message.id);
+      }
+      // Knock answers an empty `message_ids` with 422.
+      for (let i = 0; i < messageIds.length; i += BATCH_SIZE) {
+        await knock.messages.batch.archive({
+          message_ids: messageIds.slice(i, i + BATCH_SIZE),
+        });
+      }
     },
 
     async feedCredentials(userId) {

@@ -35,6 +35,8 @@ const FETCH_RETRY_MS = 250;
 /** Knock workflow key -> Cadence Notification kind. Unknown keys are hidden. */
 const KIND_BY_WORKFLOW: Record<string, NotificationKind> = {
   "discussion-reply": "discussion-reply",
+  "discussion-question": "discussion-question",
+  "seat-claimed": "seat-claimed",
 };
 
 function toNotification(item: FeedItem): FeedNotification | null {

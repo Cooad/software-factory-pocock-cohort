@@ -1,4 +1,8 @@
 import type { FeedNotification } from "~/lib/notification-feed";
+import type {
+  NotificationDataByKind,
+  NotificationKind,
+} from "~/lib/notifications";
 
 // ─── Notifications: the presenter ───
 // Pure: turns a Notification from the feed into what one popover row shows.
@@ -36,7 +40,10 @@ export type NotificationRow = {
 
 type Description = Pick<NotificationRow, "title" | "snippet" | "categoryIcon">;
 
-type KindAndData = Pick<FeedNotification, "kind" | "data">;
+/** Kind and data, still paired, so a `switch` on `kind` narrows `data`. */
+type KindAndData = {
+  [K in NotificationKind]: { kind: K; data: NotificationDataByKind[K] };
+}[NotificationKind];
 
 /**
  * Where a Notification leads, or null when it goes nowhere. Also used by the
@@ -48,9 +55,17 @@ export function notificationHref(notification: KindAndData): string | null {
       const data = notification.data;
       return `/courses/${data.courseSlug}/lessons/${data.lessonId}#comment-${data.commentId}`;
     }
+    case "discussion-question": {
+      const data = notification.data;
+      return `/courses/${data.courseSlug}/lessons/${data.lessonId}#comment-${data.commentId}`;
+    }
+    case "seat-claimed":
+      return "/team";
     default: {
-      const unhandled: never = notification.kind;
-      throw new Error(`No link for Notification kind ${unhandled}`);
+      // Once every kind has a case, the whole notification narrows to never.
+      const unhandled: never = notification;
+      const kind = (unhandled as { kind: string }).kind;
+      throw new Error(`No link for Notification kind ${kind}`);
     }
   }
 }
@@ -65,9 +80,31 @@ function describe(notification: FeedNotification, actor: string): Description {
         categoryIcon: "discussion",
       };
     }
+    case "discussion-question": {
+      const data = notification.data;
+      return {
+        title: `${actor} asked a question in ${data.lessonTitle}`,
+        snippet: `“${data.snippet}”`,
+        categoryIcon: "discussion",
+      };
+    }
+    case "seat-claimed": {
+      const data = notification.data;
+      const left = data.seatsLeft;
+      return {
+        title: `${actor} claimed a Seat on ${data.courseTitle}`,
+        snippet:
+          left === 0
+            ? "No Seats left"
+            : `${left} ${left === 1 ? "Seat" : "Seats"} left`,
+        categoryIcon: "team",
+      };
+    }
     default: {
-      const unhandled: never = notification.kind;
-      throw new Error(`No presenter for Notification kind ${unhandled}`);
+      // Once every kind has a case, the whole notification narrows to never.
+      const unhandled: never = notification;
+      const kind = (unhandled as { kind: string }).kind;
+      throw new Error(`No presenter for Notification kind ${kind}`);
     }
   }
 }

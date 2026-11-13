@@ -79,3 +79,97 @@ describe("presentNotification: relative time", () => {
     expect(row.timeAgo).toBe(expected);
   });
 });
+
+function seatClaimed(
+  seatsLeft: number,
+  overrides: Partial<FeedNotification> = {}
+): FeedNotification {
+  return {
+    id: "msg_4",
+    kind: "seat-claimed",
+    actor: { name: "Ben Student", avatarUrl: "https://example.com/ben.png" },
+    insertedAt: "2026-10-06T10:00:00.000Z",
+    seenAt: null,
+    readAt: null,
+    data: {
+      seatId: 12,
+      purchaseId: 5,
+      courseSlug: "intro-to-js",
+      courseTitle: "Intro to JS",
+      seatsLeft,
+    },
+    ...overrides,
+  } as FeedNotification;
+}
+
+describe("presentNotification: Seat claimed", () => {
+  it("says who claimed a Seat on which course, from the claiming Student, with the Team icon", () => {
+    const row = presentNotification(seatClaimed(3), NOW);
+
+    expect(row).toMatchObject({
+      id: "msg_4",
+      title: "Ben Student claimed a Seat on Intro to JS",
+      snippet: "3 Seats left",
+      categoryIcon: "team",
+      avatar: {
+        kind: "sender",
+        name: "Ben Student",
+        avatarUrl: "https://example.com/ben.png",
+      },
+      unread: true,
+      timeAgo: "2h",
+    });
+  });
+
+  it("counts the Seats left in plain words", () => {
+    expect(presentNotification(seatClaimed(1), NOW).snippet).toBe(
+      "1 Seat left"
+    );
+    expect(presentNotification(seatClaimed(0), NOW).snippet).toBe(
+      "No Seats left"
+    );
+  });
+
+  it("links to the Team page", () => {
+    expect(presentNotification(seatClaimed(3), NOW).href).toBe("/team");
+  });
+});
+
+describe("presentNotification: Discussion Question", () => {
+  const question = {
+    id: "msg_2",
+    kind: "discussion-question",
+    actor: { name: "Grace Hopper", avatarUrl: null },
+    insertedAt: "2026-10-06T10:00:00.000Z",
+    seenAt: null,
+    readAt: null,
+    data: {
+      commentId: 9,
+      courseSlug: "intro-to-js",
+      courseTitle: "Intro to JS",
+      lessonId: 3,
+      lessonTitle: "Closures",
+      snippet: "How do closures work?",
+    },
+  } as FeedNotification;
+
+  it("names who asked and the lesson, and quotes the question", () => {
+    const row = presentNotification(question, NOW);
+
+    expect(row).toMatchObject({
+      id: "msg_2",
+      title: "Grace Hopper asked a question in Closures",
+      snippet: "“How do closures work?”",
+      categoryIcon: "discussion",
+      avatar: { kind: "sender", name: "Grace Hopper", avatarUrl: null },
+      unread: true,
+      timeAgo: "2h",
+    });
+  });
+
+  it("links to the question on the lesson", () => {
+    const row = presentNotification(question, NOW);
+
+    expect(row.href).toBe("/courses/intro-to-js/lessons/3#comment-9");
+  });
+});

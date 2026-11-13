@@ -26,8 +26,40 @@ export type DiscussionReplyData = {
   snippet: string;
 };
 
+/**
+ * Data for Notification 6, sent to a course's Instructor when someone else asks
+ * a Discussion Question on one of its lessons. Flat scalars, like
+ * `DiscussionReplyData`, so archiving on delete can find it by `commentId`.
+ */
+export type DiscussionQuestionData = {
+  /** The Discussion Question. */
+  commentId: number;
+  courseSlug: string;
+  courseTitle: string;
+  lessonId: number;
+  lessonTitle: string;
+  /** The start of the question's body, frozen when it was sent. */
+  snippet: string;
+};
+
+/**
+ * Data for Notification 4, sent to the Team Admin who owns a Team Licence when
+ * one of its Seats is claimed. The claiming Student is the actor.
+ */
+export type SeatClaimedData = {
+  seatId: number;
+  /** The Team Licence. */
+  purchaseId: number;
+  courseSlug: string;
+  courseTitle: string;
+  /** Unclaimed Seats still on the Team Licence just after this claim. */
+  seatsLeft: number;
+};
+
 export type NotificationDataByKind = {
   "discussion-reply": DiscussionReplyData;
+  "discussion-question": DiscussionQuestionData;
+  "seat-claimed": SeatClaimedData;
 };
 
 export type NotificationKind = keyof NotificationDataByKind;
