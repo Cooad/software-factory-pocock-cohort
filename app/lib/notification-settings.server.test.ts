@@ -4,6 +4,7 @@ import { DEFAULT_NOTIFICATION_PREFERENCES } from "./notification-preferences";
 import { getNotificationSettings, savePreference } from "./notification-settings.server";
 import { createTestDb, seedBaseData } from "~/test/setup";
 import * as schema from "~/db/schema";
+import { createComment } from "./comments.server";
 
 const USER_ID = 7;
 
@@ -164,6 +165,42 @@ describe("getNotificationSettings", () => {
     expect(categories(settings)).toEqual([
       "refund-request-updates",
       "discussion-replies",
+    ]);
+  });
+});
+
+describe("muting a category", () => {
+  it("keeps that kind out of the feed once the switch is saved off", async () => {
+    const db = createTestDb();
+    const base = seedBaseData(db);
+    const module = db
+      .insert(schema.modules)
+      .values({ courseId: base.course.id, title: "Basics", position: 1 })
+      .returning()
+      .get();
+    const lesson = db
+      .insert(schema.lessons)
+      .values({ moduleId: module.id, title: "Lesson 1", position: 1 })
+      .returning()
+      .get();
+    const now = new Date("2026-10-06T12:00:00.000Z");
+
+    // Discussion Replies is on by default; the Student turns it off.
+    await savePreference(notifier, base.user.id, "discussion-replies", false);
+
+    const question = await createComment(
+      db, notifier, base.user.id, lesson.id, null, "How do loops work?", now
+    );
+    await createComment(
+      db, notifier, base.instructor.id, lesson.id, question.id, "Like this.", now
+    );
+
+    // The reply was sent, but the Student's feed leaves it out...
+    expect(notifier.triggers.map((t) => t.kind)).toContain("discussion-reply");
+    expect(notifier.feed(base.user.id)).toEqual([]);
+    // ...while the Instructor still gets the question (their categories are on).
+    expect(notifier.feed(base.instructor.id).map((t) => t.kind)).toEqual([
+      "discussion-question",
     ]);
   });
 });
