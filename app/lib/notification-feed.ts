@@ -1,5 +1,6 @@
 import type {
   NotificationDataByKind,
+  NotificationFeedCredentials,
   NotificationKind,
 } from "~/lib/notifications";
 
@@ -58,6 +59,13 @@ export interface NotificationFeedClient {
    * unsubscribe function.
    */
   subscribe(listener: (update: FeedUpdate) => void): () => void;
+  /**
+   * Newer credentials for the same person: the page signs a fresh token on
+   * every navigation. The client switches to them only when its own token is
+   * about to expire, so navigating doesn't reconnect. Credentials for anyone
+   * else are ignored (a user switch builds a new client instead).
+   */
+  offerCredentials(credentials: NotificationFeedCredentials): void;
   /** Releases the connection; the client is unusable afterwards. */
   disconnect(): void;
 }
@@ -75,5 +83,6 @@ export const emptyFeedClient: NotificationFeedClient = {
   subscribe() {
     return () => {};
   },
+  offerCredentials() {},
   disconnect() {},
 };

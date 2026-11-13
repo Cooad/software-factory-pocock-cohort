@@ -28,6 +28,41 @@ const PAGE_SIZE = 20;
 /** `feed.fetch()` skips (returns undefined) while another fetch is in flight. */
 const FETCH_ATTEMPTS = 10;
 const FETCH_RETRY_MS = 250;
+/** When the SDK asks for a new user token, before the current one expires. */
+const REFRESH_BEFORE_EXPIRY_MS = 60 * 1000;
+/** A token offered by the page is only worth switching to with this long left. */
+const MIN_REFRESH_TOKEN_LIFETIME_MS = 5 * 60 * 1000;
+
+const tokenClaimsSchema = z.object({ exp: z.number() });
+
+/** When a signed user token (a JWT) expires, or null if it can't be read. */
+function tokenExpiresAt(token: string): Date | null {
+  const payload = token.split(".")[1];
+  if (!payload) return null;
+  try {
+    const json = atob(payload.replace(/-/g, "+").replace(/_/g, "/"));
+    const claims = tokenClaimsSchema.safeParse(JSON.parse(json));
+    return claims.success ? new Date(claims.data.exp * 1000) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The token to refresh with, if the one the page offered still has a while to
+ * run; otherwise null, and the client fetches a fresh one.
+ */
+export function usableRefreshToken(
+  offered: string | null,
+  now: Date
+): string | null {
+  if (!offered) return null;
+  const expiresAt = tokenExpiresAt(offered);
+  if (!expiresAt) return null;
+  return expiresAt.getTime() - now.getTime() >= MIN_REFRESH_TOKEN_LIFETIME_MS
+    ? offered
+    : null;
+}
 
 /** The fields Cadence reads from a Knock feed item. */
 const knockFeedItemSchema = z.object({
@@ -103,11 +138,45 @@ export function parseFeedPage(response: unknown): FeedPage {
   };
 }
 
+/**
+ * `fetchCredentials` gets fresh credentials for the session user (the token
+ * resource route). It is only called when the user token is about to expire
+ * and the page hasn't offered a newer one, e.g. a page left open for an hour.
+ */
 export function createKnockFeedClient(
-  credentials: NotificationFeedCredentials
+  credentials: NotificationFeedCredentials,
+  fetchCredentials: () => Promise<NotificationFeedCredentials | null>
 ): NotificationFeedClient {
   const knock = new Knock(credentials.publicApiKey);
-  knock.authenticate(credentials.userId, credentials.userToken);
+  let offeredToken: string | null = null;
+
+  function isSameFeed(other: NotificationFeedCredentials) {
+    return (
+      other.userId === credentials.userId &&
+      other.publicApiKey === credentials.publicApiKey &&
+      other.feedChannelId === credentials.feedChannelId
+    );
+  }
+
+  // Re-authenticating reconnects the socket, so the token is only swapped when
+  // the SDK says the current one is about to expire, not on every new one.
+  async function onUserTokenExpiring(): Promise<string | undefined> {
+    const offered = usableRefreshToken(offeredToken, new Date());
+    if (offered) return offered;
+    try {
+      const fresh = await fetchCredentials();
+      // The session may have switched to someone else; their token is no use.
+      if (fresh && isSameFeed(fresh)) return fresh.userToken;
+    } catch (error) {
+      console.error("[notifications] could not refresh the feed token", error);
+    }
+    return undefined;
+  }
+
+  knock.authenticate(credentials.userId, credentials.userToken, {
+    onUserTokenExpiring,
+    timeBeforeExpirationInMs: REFRESH_BEFORE_EXPIRY_MS,
+  });
   const feed: Feed = knock.feeds.initialize(credentials.feedChannelId, {
     page_size: PAGE_SIZE,
   });
@@ -172,6 +241,10 @@ export function createKnockFeedClient(
         listening = true;
       }
       return () => feed.off("items.received.realtime", onReceived);
+    },
+
+    offerCredentials(newer) {
+      if (isSameFeed(newer)) offeredToken = newer.userToken;
     },
 
     disconnect() {

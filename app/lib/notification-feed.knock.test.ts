@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { parseFeedPage, toNotifications } from "./notification-feed.knock";
+import {
+  parseFeedPage,
+  toNotifications,
+  usableRefreshToken,
+} from "./notification-feed.knock";
 
 // What Knock's feed API sends, trimmed to the fields Cadence reads.
 function knockItem(overrides: Record<string, unknown> = {}) {
@@ -107,5 +111,34 @@ describe("parseFeedPage", () => {
 
   it("fails on a response that isn't a feed page", () => {
     expect(() => parseFeedPage({ error: "nope" })).toThrow();
+  });
+});
+
+/** A token shaped like the server's: a JWT whose `exp` is in seconds. */
+function tokenExpiringAt(at: Date): string {
+  const part = (value: object) =>
+    Buffer.from(JSON.stringify(value)).toString("base64url");
+  const exp = Math.floor(at.getTime() / 1000);
+  return `${part({ alg: "RS256" })}.${part({ sub: "7", exp })}.signature`;
+}
+
+describe("usableRefreshToken", () => {
+  const now = new Date("2026-11-13T12:00:00.000Z");
+
+  it("uses a token the page was given since, while it still has a while to run", () => {
+    const token = tokenExpiringAt(new Date("2026-11-13T12:40:00.000Z"));
+
+    expect(usableRefreshToken(token, now)).toBe(token);
+  });
+
+  it("passes on a token that is about to expire too, so a fresh one is fetched", () => {
+    const token = tokenExpiringAt(new Date("2026-11-13T12:02:00.000Z"));
+
+    expect(usableRefreshToken(token, now)).toBeNull();
+  });
+
+  it("passes when there is no token, or it can't be read", () => {
+    expect(usableRefreshToken(null, now)).toBeNull();
+    expect(usableRefreshToken("not-a-jwt", now)).toBeNull();
   });
 });
