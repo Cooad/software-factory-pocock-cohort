@@ -1,4 +1,9 @@
 import type { FeedNotification } from "~/lib/notification-feed";
+import type {
+  NotificationDataByKind,
+  NotificationKind,
+} from "~/lib/notifications";
+import { formatPrice } from "~/lib/utils";
 
 // ─── Notifications: the presenter ───
 // Pure: turns a Notification from the feed into what one popover row shows.
@@ -12,10 +17,7 @@ import type { FeedNotification } from "~/lib/notification-feed";
 
 /** Mapped to a lucide icon by the row component. */
 export type NotificationCategoryIcon =
-  | "discussion"
-  | "refund"
-  | "team"
-  | "enrollment";
+  "discussion" | "refund" | "team" | "enrollment";
 
 export type NotificationAvatar =
   | { kind: "sender"; name: string; avatarUrl: string | null }
@@ -36,7 +38,10 @@ export type NotificationRow = {
 
 type Description = Pick<NotificationRow, "title" | "snippet" | "categoryIcon">;
 
-type KindAndData = Pick<FeedNotification, "kind" | "data">;
+/** Distributes over the kinds, so switching on `kind` narrows `data`. */
+type KindAndData = {
+  [K in NotificationKind]: { kind: K; data: NotificationDataByKind[K] };
+}[NotificationKind];
 
 /**
  * Where a Notification leads, or null when it goes nowhere. Also used by the
@@ -48,9 +53,20 @@ export function notificationHref(notification: KindAndData): string | null {
       const data = notification.data;
       return `/courses/${data.courseSlug}/lessons/${data.lessonId}#comment-${data.commentId}`;
     }
+    // Only marks it read: the buyer has nothing to do while it is reviewed.
+    case "refund-request-confirmation":
+      return null;
+    case "open-refund-request":
+      return "/admin/refunds";
+    // The buyer's Refund Requests, with their decision notes.
+    case "refund-request-approved":
+    case "refund-request-declined":
+      return "/settings";
     default: {
-      const unhandled: never = notification.kind;
-      throw new Error(`No link for Notification kind ${unhandled}`);
+      const unhandled: never = notification;
+      throw new Error(
+        `No link for Notification kind ${(unhandled as KindAndData).kind}`
+      );
     }
   }
 }
@@ -65,9 +81,44 @@ function describe(notification: FeedNotification, actor: string): Description {
         categoryIcon: "discussion",
       };
     }
+    case "refund-request-confirmation": {
+      const data = notification.data;
+      return {
+        title: `Your refund request for ${data.courseTitle} is under review`,
+        snippet: `${formatPrice(data.amount)} · We'll let you know once it's decided.`,
+        categoryIcon: "refund",
+      };
+    }
+    case "open-refund-request": {
+      const data = notification.data;
+      return {
+        title: `${data.buyerName} requested a ${formatPrice(data.amount)} refund for ${data.courseTitle}`,
+        snippet: `“${data.reason}”`,
+        categoryIcon: "refund",
+      };
+    }
+    case "refund-request-approved": {
+      const data = notification.data;
+      const note = data.decisionNote ? ` “${data.decisionNote}”` : "";
+      return {
+        title: `Your refund for ${data.courseTitle} was approved`,
+        snippet: `${formatPrice(data.amount)} for Purchase #${data.purchaseId} is on its way back to you.${note}`,
+        categoryIcon: "refund",
+      };
+    }
+    case "refund-request-declined": {
+      const data = notification.data;
+      return {
+        title: `Your refund request for ${data.courseTitle} was declined`,
+        snippet: `“${data.decisionNote}” You can raise a new refund request.`,
+        categoryIcon: "refund",
+      };
+    }
     default: {
-      const unhandled: never = notification.kind;
-      throw new Error(`No presenter for Notification kind ${unhandled}`);
+      const unhandled: never = notification;
+      throw new Error(
+        `No presenter for Notification kind ${(unhandled as KindAndData).kind}`
+      );
     }
   }
 }

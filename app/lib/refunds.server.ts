@@ -15,8 +15,15 @@ import {
   videoWatchEvents,
   LessonProgressStatus,
   RefundStatus,
+  UserRole,
 } from "~/db/schema";
 import { formatPrice } from "~/lib/utils";
+import { toSnippet } from "~/lib/notifications";
+import {
+  notifySafely,
+  type NotificationPerson,
+  type Notifier,
+} from "~/lib/notifications.server";
 import {
   REFUND_COMPLETION_LIMIT,
   REFUND_WATCH_LIMIT_SECONDS,
@@ -257,6 +264,77 @@ function findRuleBreaks(
   return breaks;
 }
 
+// ─── Refund Request Notifications ───
+// Sent inline after the write commits, through `notifySafely`, so they never
+// fail the action. Unlike the emails, which the routes send and which throw.
+
+type User = typeof users.$inferSelect;
+type Course = typeof courses.$inferSelect;
+
+function toPerson(user: User): NotificationPerson {
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    avatarUrl: user.avatarUrl,
+  };
+}
+
+/** Whoever is a Platform Admin right now, so newly promoted ones are included. */
+function getPlatformAdmins(db: Queryable): User[] {
+  return db
+    .select()
+    .from(users)
+    .where(eq(users.role, UserRole.Admin))
+    .orderBy(asc(users.id))
+    .all();
+}
+
+function refundRequestFacts(
+  refundRequestId: number,
+  purchase: Purchase,
+  course: Course
+) {
+  return {
+    refundRequestId,
+    purchaseId: purchase.id,
+    courseSlug: course.slug,
+    courseTitle: course.title,
+    amount: purchase.amountPaid,
+  };
+}
+
+/**
+ * Who a decided Refund Request's Notification goes to and comes from, read
+ * after the decision commits.
+ */
+function getDecisionContext(
+  db: Queryable,
+  refundRequestId: number,
+  platformAdminId: number
+) {
+  const row = db
+    .select({ purchase: purchases, course: courses, buyer: users })
+    .from(refunds)
+    .innerJoin(purchases, eq(refunds.purchaseId, purchases.id))
+    .innerJoin(courses, eq(purchases.courseId, courses.id))
+    .innerJoin(users, eq(purchases.userId, users.id))
+    .where(eq(refunds.id, refundRequestId))
+    .get();
+  const platformAdmin = db
+    .select()
+    .from(users)
+    .where(eq(users.id, platformAdminId))
+    .get();
+  if (!row) return null;
+
+  return {
+    buyer: toPerson(row.buyer),
+    platformAdmin: platformAdmin ? toPerson(platformAdmin) : null,
+    facts: refundRequestFacts(refundRequestId, row.purchase, row.course),
+  };
+}
+
 // ─── Raising a Refund Request ───
 
 export type Failure = { ok: false; status: 400 | 403 | 404 | 409; error: string };
@@ -354,13 +432,19 @@ export type RaiseResult =
   | { ok: true; refundRequestId: number; kind: PurchaseKind; email: Email }
   | Failure;
 
-export function raiseRefundRequest(
+/**
+ * Raises a Refund Request, then confirms it to the buyer (Notification 8) and
+ * tells every Platform Admin (Notification 3). Notifications are best-effort:
+ * a failing `notifier` never fails the request.
+ */
+export async function raiseRefundRequest(
   db: Db,
+  notifier: Notifier,
   purchaseId: number,
   buyerId: number,
   reason: string,
   now: Date
-): RaiseResult {
+): Promise<RaiseResult> {
   const check = checkRefundRequest(db, purchaseId, buyerId, now);
   if (!check.ok) return check;
 
@@ -386,6 +470,22 @@ export function raiseRefundRequest(
     })
     .returning()
     .get();
+
+  const facts = refundRequestFacts(refundRequest.id, purchase, course);
+  await notifySafely(notifier, {
+    kind: "refund-request-confirmation",
+    recipients: [toPerson(buyer)],
+    actor: null,
+    data: facts,
+    idempotencyKey: `refund-confirmation:${refundRequest.id}`,
+  });
+  await notifySafely(notifier, {
+    kind: "open-refund-request",
+    recipients: getPlatformAdmins(db).map(toPerson),
+    actor: toPerson(buyer),
+    data: { ...facts, buyerName: buyer.name, reason: toSnippet(reason) },
+    idempotencyKey: `refund-requested:${refundRequest.id}`,
+  });
 
   return {
     ok: true,
@@ -611,14 +711,15 @@ function findOpenRefundRequest(
  * - A Team Licence: its Unclaimed Seats can never be claimed. Refused if any
  *   Seat has been claimed (docs/adr/0003).
  */
-export function approveRefundRequest(
+export async function approveRefundRequest(
   db: Db,
+  notifier: Notifier,
   refundRequestId: number,
   platformAdminId: number,
   note: string | null,
   now: Date
-): DecisionResult {
-  return db.transaction((tx): DecisionResult => {
+): Promise<DecisionResult> {
+  const result = db.transaction((tx): DecisionResult => {
     const found = findOpenRefundRequest(tx, refundRequestId);
     if (!found.ok) return found;
 
@@ -682,6 +783,21 @@ export function approveRefundRequest(
       email: buildDecisionEmail(tx, purchase, RefundStatus.Approved, note),
     };
   });
+
+  if (result.ok) {
+    const decision = getDecisionContext(db, refundRequestId, platformAdminId);
+    if (decision) {
+      await notifySafely(notifier, {
+        kind: "refund-request-approved",
+        recipients: [decision.buyer],
+        actor: decision.platformAdmin,
+        data: { ...decision.facts, decisionNote: note },
+        idempotencyKey: `refund-approved:${refundRequestId}`,
+      });
+    }
+  }
+
+  return result;
 }
 
 /**
@@ -689,13 +805,14 @@ export function approveRefundRequest(
  * the buyer may raise a new Refund Request. The note is required: it is how
  * the buyer learns whether another request is worth raising.
  */
-export function declineRefundRequest(
+export async function declineRefundRequest(
   db: Db,
+  notifier: Notifier,
   refundRequestId: number,
   platformAdminId: number,
   note: string,
   now: Date
-): DecisionResult {
+): Promise<DecisionResult> {
   const trimmedNote = note.trim();
 
   if (trimmedNote.length === 0) {
@@ -706,7 +823,7 @@ export function declineRefundRequest(
     };
   }
 
-  return db.transaction((tx): DecisionResult => {
+  const result = db.transaction((tx): DecisionResult => {
     const found = findOpenRefundRequest(tx, refundRequestId);
     if (!found.ok) return found;
 
@@ -730,6 +847,21 @@ export function declineRefundRequest(
       ),
     };
   });
+
+  if (result.ok) {
+    const decision = getDecisionContext(db, refundRequestId, platformAdminId);
+    if (decision) {
+      await notifySafely(notifier, {
+        kind: "refund-request-declined",
+        recipients: [decision.buyer],
+        actor: decision.platformAdmin,
+        data: { ...decision.facts, decisionNote: trimmedNote },
+        idempotencyKey: `refund-declined:${refundRequestId}`,
+      });
+    }
+  }
+
+  return result;
 }
 
 /** The email the buyer gets once their Refund Request is decided. */

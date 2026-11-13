@@ -26,8 +26,42 @@ export type DiscussionReplyData = {
   snippet: string;
 };
 
+/** What every Refund Request Notification says about the Purchase. */
+type RefundRequestFacts = {
+  refundRequestId: number;
+  purchaseId: number;
+  courseSlug: string;
+  courseTitle: string;
+  /** What the buyer paid, in integer cents (docs/adr/0005). */
+  amount: number;
+};
+
+/** Notification 8: the buyer's Refund Request was received. Sent by Cadence. */
+export type RefundRequestConfirmationData = RefundRequestFacts;
+
+/** Notification 3: a new Open Refund Request, for every Platform Admin. */
+export type OpenRefundRequestData = RefundRequestFacts & {
+  buyerName: string;
+  /** The start of the buyer's reason, frozen when it was sent. */
+  reason: string;
+};
+
+/** Notification 1: a Platform Admin approved the buyer's Refund Request. */
+export type RefundRequestApprovedData = RefundRequestFacts & {
+  decisionNote: string | null;
+};
+
+/** Notification 2: a Platform Admin declined the buyer's Refund Request. */
+export type RefundRequestDeclinedData = RefundRequestFacts & {
+  decisionNote: string;
+};
+
 export type NotificationDataByKind = {
   "discussion-reply": DiscussionReplyData;
+  "refund-request-confirmation": RefundRequestConfirmationData;
+  "open-refund-request": OpenRefundRequestData;
+  "refund-request-approved": RefundRequestApprovedData;
+  "refund-request-declined": RefundRequestDeclinedData;
 };
 
 export type NotificationKind = keyof NotificationDataByKind;
