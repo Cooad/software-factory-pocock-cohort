@@ -1,17 +1,16 @@
-import Knock, {
-  type Feed,
-  type FeedEventPayload,
-  type FeedItem,
-  type FeedMetadata,
-  type FeedResponse,
-} from "@knocklabs/client";
+import Knock, { type Feed, type FeedEventPayload } from "@knocklabs/client";
+import { z } from "zod";
 import type {
   FeedCounts,
   FeedNotification,
+  FeedPage,
   FeedUpdate,
   NotificationFeedClient,
 } from "~/lib/notification-feed";
-import type { NotificationFeedCredentials } from "~/lib/notifications";
+import {
+  NOTIFICATION_SCHEMAS,
+  type NotificationFeedCredentials,
+} from "~/lib/notifications";
 import { kindForWorkflow } from "~/lib/notifications.knock";
 
 // ─── Notifications: Knock client adapter (browser only) ───
@@ -30,35 +29,78 @@ const PAGE_SIZE = 20;
 const FETCH_ATTEMPTS = 10;
 const FETCH_RETRY_MS = 250;
 
-function toNotification(item: FeedItem): FeedNotification | null {
-  const kind = kindForWorkflow(item.source.key);
-  if (!kind || !item.data) return null;
-  const actor = item.actors[0];
+/** The fields Cadence reads from a Knock feed item. */
+const knockFeedItemSchema = z.object({
+  id: z.string(),
+  source: z.object({ key: z.string() }),
+  actors: z.array(
+    z.object({
+      name: z.string().nullish(),
+      avatar: z.string().nullish(),
+    })
+  ),
+  data: z.unknown(),
+  inserted_at: z.string(),
+  seen_at: z.string().nullable(),
+  read_at: z.string().nullable(),
+});
+
+const knockFeedMetadataSchema = z.object({
+  unseen_count: z.number(),
+  unread_count: z.number(),
+});
+
+const knockFeedResponseSchema = z.object({
+  entries: z.array(z.unknown()),
+  meta: knockFeedMetadataSchema,
+  page_info: z.object({ after: z.string().nullish() }),
+});
+
+/**
+ * One Knock feed item as a Cadence Notification, or null when it is from a
+ * workflow Cadence doesn't know or doesn't fit its kind's data shape.
+ */
+function toNotification(raw: unknown): FeedNotification | null {
+  const item = knockFeedItemSchema.safeParse(raw);
+  if (!item.success) return null;
+  const { id, source, actors, data, inserted_at, seen_at, read_at } = item.data;
+  const kind = kindForWorkflow(source.key);
+  if (!kind) return null;
+  const actor = actors[0];
+  const kindAndData = NOTIFICATION_SCHEMAS[kind].safeParse({ kind, data });
+  if (!kindAndData.success) return null;
   return {
-    id: item.id,
-    kind,
+    ...kindAndData.data,
+    id,
     actor: actor
-      ? {
-          name: "name" in actor && actor.name ? String(actor.name) : "",
-          avatarUrl:
-            "avatar" in actor && actor.avatar ? String(actor.avatar) : null,
-        }
+      ? { name: actor.name ?? "", avatarUrl: actor.avatar || null }
       : null,
-    data: item.data,
-    insertedAt: item.inserted_at,
-    seenAt: item.seen_at,
-    readAt: item.read_at,
-  } as FeedNotification;
+    insertedAt: inserted_at,
+    seenAt: seen_at,
+    readAt: read_at,
+  };
 }
 
-function toNotifications(items: FeedItem[]): FeedNotification[] {
+/** Knock feed items as Notifications; malformed or unknown items are dropped. */
+export function toNotifications(items: unknown[]): FeedNotification[] {
   return items
     .map(toNotification)
     .filter((n): n is FeedNotification => n !== null);
 }
 
-function toCounts(metadata: FeedMetadata): FeedCounts {
-  return { unseen: metadata.unseen_count, unread: metadata.unread_count };
+function toCounts(metadata: unknown): FeedCounts {
+  const meta = knockFeedMetadataSchema.parse(metadata);
+  return { unseen: meta.unseen_count, unread: meta.unread_count };
+}
+
+/** A Knock feed response as a page. Throws if it isn't a feed response. */
+export function parseFeedPage(response: unknown): FeedPage {
+  const page = knockFeedResponseSchema.parse(response);
+  return {
+    notifications: toNotifications(page.entries),
+    counts: toCounts(page.meta),
+    nextCursor: page.page_info.after ?? null,
+  };
 }
 
 export function createKnockFeedClient(
@@ -70,12 +112,12 @@ export function createKnockFeedClient(
     page_size: PAGE_SIZE,
   });
 
-  async function fetchPage(cursor?: string | null): Promise<FeedResponse> {
+  async function fetchPage(cursor?: string | null): Promise<unknown> {
     for (let attempt = 1; attempt <= FETCH_ATTEMPTS; attempt++) {
       const result = await feed.fetch(cursor ? { after: cursor } : {});
       if (result) {
         if (result.status !== "ok") break;
-        return result.data as FeedResponse;
+        return result.data;
       }
       // A live update's fetch is in flight; wait for it rather than drop
       // the page the person scrolled to.
@@ -88,12 +130,7 @@ export function createKnockFeedClient(
 
   return {
     async listPage(cursor) {
-      const page = await fetchPage(cursor);
-      return {
-        notifications: toNotifications(page.entries),
-        counts: toCounts(page.meta),
-        nextCursor: page.page_info.after ?? null,
-      };
+      return parseFeedPage(await fetchPage(cursor));
     },
 
     async getCounts() {

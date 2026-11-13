@@ -2,6 +2,7 @@ import type { FeedNotification } from "~/lib/notification-feed";
 import type {
   NotificationDataByKind,
   NotificationKind,
+  NotificationKindAndData,
 } from "~/lib/notifications";
 import { formatPrice } from "~/lib/utils";
 
@@ -136,24 +137,18 @@ const PRESENTERS: { [K in NotificationKind]: KindPresenter<K> } = {
   },
 };
 
-/** Kind and data, still paired. */
-type KindAndData<K extends NotificationKind = NotificationKind> = {
-  kind: K;
-  data: NotificationDataByKind[K];
-};
-
 /**
  * Where a Notification leads, or null when it goes nowhere. Also used by the
  * Knock adapter for the workflow's action URL.
  */
 export function notificationHref<K extends NotificationKind>(
-  notification: KindAndData<K>
+  notification: NotificationKindAndData<K>
 ): string | null {
   return PRESENTERS[notification.kind].href(notification.data);
 }
 
 function describe<K extends NotificationKind>(
-  notification: KindAndData<K>,
+  notification: NotificationKindAndData<K>,
   actor: string
 ): Pick<NotificationRow, "title" | "snippet" | "categoryIcon"> {
   const presenter = PRESENTERS[notification.kind];

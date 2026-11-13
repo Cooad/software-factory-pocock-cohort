@@ -1,5 +1,7 @@
 import Knock, { NotFoundError, signUserToken } from "@knocklabs/node";
+import { z } from "zod";
 import {
+  DEFAULT_NOTIFICATION_PREFERENCES,
   NOTIFICATION_CHANNELS,
   PREFERENCE_CATEGORIES,
   type NotificationChannel,
@@ -35,9 +37,18 @@ const USER_TOKEN_TTL_SECONDS = 60 * 60;
 /** Knock's limit on `message_ids` in one batch call. */
 const BATCH_SIZE = 50;
 
-type KnockCategories = NonNullable<
-  Awaited<ReturnType<Knock["users"]["getPreferences"]>>["categories"]
->;
+/** Knock's preference set, as far as Cadence reads it. */
+const knockPreferenceSetSchema = z.object({
+  categories: z.record(z.string(), z.unknown()).nullish(),
+});
+
+/** One category in the set: a plain switch, or one per channel type. */
+const knockCategorySettingSchema = z.union([
+  z.boolean(),
+  z.object({
+    channel_types: z.record(z.string(), z.unknown()).nullish(),
+  }),
+]);
 
 function toKnockCategories(preferences: NotificationPreferences) {
   return Object.fromEntries(
@@ -55,26 +66,36 @@ function toKnockCategories(preferences: NotificationPreferences) {
   );
 }
 
-// Knock delivers when a category or channel type is missing from the set, so
-// a missing entry reads as on.
-function fromKnockCategories(
-  categories: KnockCategories
-): NotificationPreferences {
-  return Object.fromEntries(
-    PREFERENCE_CATEGORIES.map((category) => {
-      const setting = categories[KNOCK_CATEGORY_KEY[category]];
-      return [
-        category,
-        Object.fromEntries(
-          NOTIFICATION_CHANNELS.map((channel) => {
-            if (typeof setting === "boolean") return [channel, setting];
-            const value = setting?.channel_types?.[CHANNEL_TYPE[channel]];
-            return [channel, typeof value === "boolean" ? value : true];
-          })
-        ),
-      ];
-    })
-  ) as NotificationPreferences;
+/**
+ * A person's preferences from Knock's preference set, or null when none are
+ * stored. Knock answers with an all-null "default" set for a user who has
+ * never had preferences written, so no categories means none. Knock delivers
+ * when a category or channel type is missing, so a missing (or malformed)
+ * entry reads as on.
+ */
+export function preferencesFromKnock(set: unknown): NotificationPreferences | null {
+  const parsed = knockPreferenceSetSchema.safeParse(set);
+  if (!parsed.success) return null;
+  const categories = parsed.data.categories;
+  if (!categories || Object.keys(categories).length === 0) return null;
+
+  const preferences = structuredClone(DEFAULT_NOTIFICATION_PREFERENCES);
+  for (const category of PREFERENCE_CATEGORIES) {
+    const setting = knockCategorySettingSchema.safeParse(
+      categories[KNOCK_CATEGORY_KEY[category]]
+    );
+    for (const channel of NOTIFICATION_CHANNELS) {
+      let enabled = true;
+      if (setting.success && typeof setting.data === "boolean") {
+        enabled = setting.data;
+      } else if (setting.success && typeof setting.data === "object") {
+        const value = setting.data.channel_types?.[CHANNEL_TYPE[channel]];
+        if (typeof value === "boolean") enabled = value;
+      }
+      preferences[category][channel] = enabled;
+    }
+  }
+  return preferences;
 }
 
 function toKnockUser(person: NotificationPerson) {
@@ -143,15 +164,9 @@ export function knockNotifier(config: KnockConfig): Notifier {
 
     async getPreferences(userId) {
       try {
-        const set = await knock.users.getPreferences(
-          String(userId),
-          PREFERENCE_SET_ID
+        return preferencesFromKnock(
+          await knock.users.getPreferences(String(userId), PREFERENCE_SET_ID)
         );
-        // Knock answers with an all-null "default" set for a user who has
-        // never had preferences written, so no categories means none.
-        const categories = set.categories;
-        if (!categories || Object.keys(categories).length === 0) return null;
-        return fromKnockCategories(categories);
       } catch (error) {
         if (error instanceof NotFoundError) return null; // never identified
         throw error;
