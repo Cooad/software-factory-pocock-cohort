@@ -12,9 +12,8 @@ import type {
 // - `emptyFeedClient` (below): used when the server has no feed (no Knock
 //   keys). Shows "You're all caught up."
 //
-// Later work (#34) extends this port with `markAllRead()` and a
-// `subscribe(listener)` for live updates over Knock's socket; `disconnect()`
-// is where that socket is torn down.
+// One client per signed-in person holds one live connection. Nothing polls:
+// Knock rate-limits rapid feed reads (429). `disconnect()` closes it.
 
 /** One Notification as the feed holds it, in Cadence's language. */
 export type FeedNotification = {
@@ -39,13 +38,26 @@ export type FeedPage = {
   nextCursor: string | null;
 };
 
+/** What arrives live: new Notifications and the feed's counts after them. */
+export type FeedUpdate = {
+  notifications: FeedNotification[];
+  counts: FeedCounts;
+};
+
 export interface NotificationFeedClient {
   /** A page of Notifications, newest first. No cursor means the first page. */
   listPage(cursor?: string | null): Promise<FeedPage>;
   getCounts(): Promise<FeedCounts>;
   /** Marks every Notification seen, including ones not loaded yet. */
   markAllSeen(): Promise<void>;
+  /** Marks every Notification read, including ones not loaded yet. */
+  markAllRead(): Promise<void>;
   markRead(notificationId: string): Promise<void>;
+  /**
+   * Calls `listener` whenever Notifications arrive live. Returns the
+   * unsubscribe function.
+   */
+  subscribe(listener: (update: FeedUpdate) => void): () => void;
   /** Releases the connection; the client is unusable afterwards. */
   disconnect(): void;
 }
@@ -58,6 +70,10 @@ export const emptyFeedClient: NotificationFeedClient = {
     return { unseen: 0, unread: 0 };
   },
   async markAllSeen() {},
+  async markAllRead() {},
   async markRead() {},
+  subscribe() {
+    return () => {};
+  },
   disconnect() {},
 };
