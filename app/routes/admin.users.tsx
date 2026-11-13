@@ -20,6 +20,8 @@ import {
 } from "~/components/ui/select";
 import { AlertTriangle, Pencil, Shield, Users } from "lucide-react";
 import { data, isRouteErrorResponse, Link } from "react-router";
+import { adminUpdateUser } from "~/lib/users.server";
+import { defaultNotifier } from "~/lib/notifications.server";
 
 const adminUserActionSchema = z.discriminatedUnion("intent", [
   z.object({
@@ -41,20 +43,6 @@ function getAllUsers() {
 
 function getUserById(id: number) {
   return db.select().from(users).where(eq(users.id, id)).get();
-}
-
-function updateUser(
-  id: number,
-  name: string,
-  email: string,
-  bio: string | null
-) {
-  return db
-    .update(users)
-    .set({ name, email, bio })
-    .where(eq(users.id, id))
-    .returning()
-    .get();
 }
 
 function updateUserRole(id: number, role: UserRole) {
@@ -118,8 +106,11 @@ export async function action({ request }: Route.ActionArgs) {
 
   if (intent === "update-user") {
     const { userId, name, email } = parsed.data;
-    const user = getUserById(userId);
-    updateUser(userId, name, email, user?.bio ?? null);
+    if (!getUserById(userId)) {
+      return data({ error: "User not found." }, { status: 404 });
+    }
+    // Role changes (below) aren't synced to Notifications; name and email are.
+    await adminUpdateUser(db, defaultNotifier(), userId, name, email);
     return { success: true };
   }
 

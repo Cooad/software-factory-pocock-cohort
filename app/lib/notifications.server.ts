@@ -5,6 +5,10 @@ import type {
   NotificationKind,
 } from "~/lib/notifications";
 import { knockNotifier } from "~/lib/notifications.knock.server";
+import {
+  DEFAULT_NOTIFICATION_PREFERENCES,
+  type NotificationPreferences,
+} from "~/lib/notification-preferences";
 
 // ─── Notifications: the server port ───
 // How Cadence sends Notifications, shaped like `MailTransport`. Services take a
@@ -52,6 +56,18 @@ export interface Notifier {
    * a Discussion Question or Reply is soft-deleted.
    */
   archiveCausedByComment(commentId: number): Promise<void>;
+  /**
+   * Creates or updates the user at the vendor (name, email, avatar). Role is
+   * never sent. Callers use `syncUser`, which also writes the defaults.
+   */
+  identifyUser(person: NotificationPerson): Promise<void>;
+  /** The user's stored preference set, or null when they have none yet. */
+  getPreferences(userId: number): Promise<NotificationPreferences | null>;
+  /** Replaces the user's whole preference set. */
+  setPreferences(
+    userId: number,
+    preferences: NotificationPreferences
+  ): Promise<void>;
 }
 
 /**
@@ -87,6 +103,39 @@ export async function archiveCausedByCommentSafely(
   }
 }
 
+/**
+ * Keeps a Cadence user in sync with the vendor: identifies them, and writes the
+ * default preference set only if they have none yet, so a choice they've made
+ * is never reset. Safe to run again. Callers use `syncUserSafely`.
+ */
+export async function syncUser(
+  notifier: Notifier,
+  person: NotificationPerson
+): Promise<void> {
+  await notifier.identifyUser(person);
+  const existing = await notifier.getPreferences(person.id);
+  if (existing === null) {
+    await notifier.setPreferences(person.id, DEFAULT_NOTIFICATION_PREFERENCES);
+  }
+}
+
+/**
+ * `syncUser` that logs a failure instead of failing the caller's action.
+ * Returns whether the sync succeeded.
+ */
+export async function syncUserSafely(
+  notifier: Notifier,
+  person: NotificationPerson
+): Promise<boolean> {
+  try {
+    await syncUser(notifier, person);
+    return true;
+  } catch (error) {
+    console.error(`[notifications] syncing user ${person.id} failed:`, error);
+    return false;
+  }
+}
+
 export function loggingNotifier(): Notifier {
   return {
     async trigger(notification) {
@@ -104,6 +153,12 @@ export function loggingNotifier(): Notifier {
         `[notifications] (no KNOCK_SECRET_API_KEY, not sent) archive for comment ${commentId}`
       );
     },
+    // User sync is silent without keys, or the seed would log every user.
+    async identifyUser() {},
+    async getPreferences() {
+      return null;
+    },
+    async setPreferences() {},
   };
 }
 
