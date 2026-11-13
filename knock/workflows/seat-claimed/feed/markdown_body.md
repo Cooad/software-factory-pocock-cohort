@@ -1,0 +1,1 @@
+One of your seats was claimed.

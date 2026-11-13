@@ -1,0 +1,19 @@
+{
+  "name": "New Enrollment",
+  "description": "Notification 5: tells the course's Instructor a Student enrolled. Off by default (Cadence writes the default preference set). Cadence writes the row text from the trigger data; this body is only Knock's fallback.",
+  "categories": ["enrollments"],
+  "steps": [
+    {
+      "ref": "feed",
+      "type": "channel",
+      "channel_type": "in_app_feed",
+      "channel_key": "cadence-feed",
+      "template": {
+        "action_url": "{{ data.url }}",
+        "markdown_body@": "feed/markdown_body.md"
+      }
+    }
+  ],
+  "trigger_frequency": "every_trigger",
+  "$schema": "https://schemas.knock.app/cli/workflow.json"
+}
