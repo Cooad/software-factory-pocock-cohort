@@ -15,6 +15,7 @@ import type {
 
 const WORKFLOW_KEY: Record<NotificationKind, string> = {
   "discussion-reply": "discussion-reply",
+  "seat-claimed": "seat-claimed",
   "refund-request-confirmation": "refund-request-confirmation",
   "open-refund-request": "open-refund-request",
   "refund-request-approved": "refund-request-approved",

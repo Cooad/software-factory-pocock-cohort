@@ -26,6 +26,7 @@ const PAGE_SIZE = 20;
 /** Knock workflow key -> Cadence Notification kind. Unknown keys are hidden. */
 const KIND_BY_WORKFLOW: Record<string, NotificationKind> = {
   "discussion-reply": "discussion-reply",
+  "seat-claimed": "seat-claimed",
   "refund-request-confirmation": "refund-request-confirmation",
   "open-refund-request": "open-refund-request",
   "refund-request-approved": "refund-request-approved",

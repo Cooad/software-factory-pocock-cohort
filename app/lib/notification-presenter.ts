@@ -38,7 +38,7 @@ export type NotificationRow = {
 
 type Description = Pick<NotificationRow, "title" | "snippet" | "categoryIcon">;
 
-/** Distributes over the kinds, so switching on `kind` narrows `data`. */
+/** Kind and data, still paired, so a `switch` on `kind` narrows `data`. */
 type KindAndData = {
   [K in NotificationKind]: { kind: K; data: NotificationDataByKind[K] };
 }[NotificationKind];
@@ -53,6 +53,8 @@ export function notificationHref(notification: KindAndData): string | null {
       const data = notification.data;
       return `/courses/${data.courseSlug}/lessons/${data.lessonId}#comment-${data.commentId}`;
     }
+    case "seat-claimed":
+      return "/team";
     // Only marks it read: the buyer has nothing to do while it is reviewed.
     case "refund-request-confirmation":
       return null;
@@ -63,10 +65,10 @@ export function notificationHref(notification: KindAndData): string | null {
     case "refund-request-declined":
       return "/settings";
     default: {
+      // Once every kind has a case, the whole notification narrows to never.
       const unhandled: never = notification;
-      throw new Error(
-        `No link for Notification kind ${(unhandled as KindAndData).kind}`
-      );
+      const kind = (unhandled as { kind: string }).kind;
+      throw new Error(`No link for Notification kind ${kind}`);
     }
   }
 }
@@ -114,11 +116,23 @@ function describe(notification: FeedNotification, actor: string): Description {
         categoryIcon: "refund",
       };
     }
+    case "seat-claimed": {
+      const data = notification.data;
+      const left = data.seatsLeft;
+      return {
+        title: `${actor} claimed a Seat on ${data.courseTitle}`,
+        snippet:
+          left === 0
+            ? "No Seats left"
+            : `${left} ${left === 1 ? "Seat" : "Seats"} left`,
+        categoryIcon: "team",
+      };
+    }
     default: {
+      // Once every kind has a case, the whole notification narrows to never.
       const unhandled: never = notification;
-      throw new Error(
-        `No presenter for Notification kind ${(unhandled as KindAndData).kind}`
-      );
+      const kind = (unhandled as { kind: string }).kind;
+      throw new Error(`No presenter for Notification kind ${kind}`);
     }
   }
 }
