@@ -26,8 +26,23 @@ export type DiscussionReplyData = {
   snippet: string;
 };
 
+/**
+ * Data for Notification 4, sent to the Team Admin who owns a Team Licence when
+ * one of its Seats is claimed. The claiming Student is the actor.
+ */
+export type SeatClaimedData = {
+  seatId: number;
+  /** The Team Licence. */
+  purchaseId: number;
+  courseSlug: string;
+  courseTitle: string;
+  /** Unclaimed Seats still on the Team Licence just after this claim. */
+  seatsLeft: number;
+};
+
 export type NotificationDataByKind = {
   "discussion-reply": DiscussionReplyData;
+  "seat-claimed": SeatClaimedData;
 };
 
 export type NotificationKind = keyof NotificationDataByKind;

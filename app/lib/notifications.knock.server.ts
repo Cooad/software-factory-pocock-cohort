@@ -22,6 +22,7 @@ import type {
 
 const WORKFLOW_KEY: Record<NotificationKind, string> = {
   "discussion-reply": "discussion-reply",
+  "seat-claimed": "seat-claimed",
 };
 
 /** Cadence preference category → Knock category key (see knock/workflows). */
