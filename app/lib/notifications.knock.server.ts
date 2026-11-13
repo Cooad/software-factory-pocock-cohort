@@ -1,13 +1,15 @@
 import Knock, { NotFoundError, signUserToken } from "@knocklabs/node";
-import type { NotificationKind } from "~/lib/notifications";
 import {
   NOTIFICATION_CHANNELS,
   PREFERENCE_CATEGORIES,
   type NotificationChannel,
   type NotificationPreferences,
-  type PreferenceCategory,
 } from "~/lib/notification-preferences";
 import { notificationHref } from "~/lib/notification-presenter";
+import {
+  KNOCK_CATEGORY_KEY,
+  WORKFLOW_KEY_BY_KIND,
+} from "~/lib/notifications.knock";
 import type {
   KnockConfig,
   NotificationPerson,
@@ -19,27 +21,6 @@ import type {
 // The only server code that talks to Knock. Maps Cadence's Notification kinds
 // to the workflow keys defined in `knock/workflows/` and Cadence users to Knock
 // users (Knock user id = Cadence user id as a string).
-
-const WORKFLOW_KEY: Record<NotificationKind, string> = {
-  "discussion-reply": "discussion-reply",
-  "discussion-question": "discussion-question",
-  "seat-claimed": "seat-claimed",
-  "new-enrollment": "new-enrollment",
-  "refund-request-confirmation": "refund-request-confirmation",
-  "open-refund-request": "open-refund-request",
-  "refund-request-approved": "refund-request-approved",
-  "refund-request-declined": "refund-request-declined",
-};
-
-/** Cadence preference category → Knock category key (see knock/workflows). */
-const CATEGORY_KEY: Record<PreferenceCategory, string> = {
-  "refund-request-updates": "refund-request-updates",
-  "open-refund-requests": "open-refund-requests",
-  "seat-claims": "seat-claims",
-  enrollments: "enrollments",
-  "discussion-questions": "discussion-questions",
-  "discussion-replies": "discussion-replies",
-};
 
 /** Cadence channel → Knock channel type. */
 const CHANNEL_TYPE: Record<NotificationChannel, "in_app_feed"> = {
@@ -61,7 +42,7 @@ type KnockCategories = NonNullable<
 function toKnockCategories(preferences: NotificationPreferences) {
   return Object.fromEntries(
     PREFERENCE_CATEGORIES.map((category) => [
-      CATEGORY_KEY[category],
+      KNOCK_CATEGORY_KEY[category],
       {
         channel_types: Object.fromEntries(
           NOTIFICATION_CHANNELS.map((channel) => [
@@ -81,7 +62,7 @@ function fromKnockCategories(
 ): NotificationPreferences {
   return Object.fromEntries(
     PREFERENCE_CATEGORIES.map((category) => {
-      const setting = categories[CATEGORY_KEY[category]];
+      const setting = categories[KNOCK_CATEGORY_KEY[category]];
       return [
         category,
         Object.fromEntries(
@@ -112,7 +93,7 @@ export function knockNotifier(config: KnockConfig): Notifier {
   return {
     async trigger(notification) {
       await knock.workflows.trigger(
-        WORKFLOW_KEY[notification.kind],
+        WORKFLOW_KEY_BY_KIND[notification.kind],
         {
           recipients: notification.recipients.map(toKnockUser),
           actor: notification.actor ? toKnockUser(notification.actor) : null,

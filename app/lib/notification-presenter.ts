@@ -11,8 +11,8 @@ import { formatPrice } from "~/lib/utils";
 // from Knock templates, so a Notification reads as a snapshot of when it was
 // sent.
 //
-// Adding a kind: add a `case` to `describe` and `notificationHref` below. The
-// `never` checks make the compiler point here once the kind is in
+// Adding a kind: add its entry to `PRESENTERS` below. The `Record` over every
+// kind makes the compiler point here once the kind is in
 // `NotificationDataByKind`.
 
 /** Mapped to a lucide icon by the row component. */
@@ -36,103 +36,47 @@ export type NotificationRow = {
   timeAgo: string;
 };
 
-type Description = Pick<NotificationRow, "title" | "snippet" | "categoryIcon">;
+/** How one kind of Notification reads, where it leads and its icon. */
+type KindPresenter<K extends NotificationKind> = {
+  icon: NotificationCategoryIcon;
+  /** Title and snippet, given the sender's name ("Someone" if unnamed). */
+  text(
+    data: NotificationDataByKind[K],
+    actor: string
+  ): Pick<NotificationRow, "title" | "snippet">;
+  /** Where clicking leads, or null to only mark it read. */
+  href(data: NotificationDataByKind[K]): string | null;
+};
 
-/** Kind and data, still paired, so a `switch` on `kind` narrows `data`. */
-type KindAndData = {
-  [K in NotificationKind]: { kind: K; data: NotificationDataByKind[K] };
-}[NotificationKind];
-
-/**
- * Where a Notification leads, or null when it goes nowhere. Also used by the
- * Knock adapter for the workflow's action URL.
- */
-export function notificationHref(notification: KindAndData): string | null {
-  switch (notification.kind) {
-    case "discussion-reply": {
-      const data = notification.data;
-      return `/courses/${data.courseSlug}/lessons/${data.lessonId}#comment-${data.commentId}`;
-    }
-    case "discussion-question": {
-      const data = notification.data;
-      return `/courses/${data.courseSlug}/lessons/${data.lessonId}#comment-${data.commentId}`;
-    }
-    case "seat-claimed":
-      return "/team";
-    // The course's Students list, where the new Student now appears.
-    case "new-enrollment":
-      return `/instructor/${notification.data.courseId}/students`;
-    // Only marks it read: the buyer has nothing to do while it is reviewed.
-    case "refund-request-confirmation":
-      return null;
-    case "open-refund-request":
-      return "/admin/refunds";
-    // The buyer's Refund Requests, with their decision notes.
-    case "refund-request-approved":
-    case "refund-request-declined":
-      return "/settings";
-    default: {
-      // Once every kind has a case, the whole notification narrows to never.
-      const unhandled: never = notification;
-      const kind = (unhandled as { kind: string }).kind;
-      throw new Error(`No link for Notification kind ${kind}`);
-    }
-  }
+/** A Discussion Notification links to its comment on the lesson. */
+function commentHref(data: {
+  courseSlug: string;
+  lessonId: number;
+  commentId: number;
+}): string {
+  return `/courses/${data.courseSlug}/lessons/${data.lessonId}#comment-${data.commentId}`;
 }
 
-function describe(notification: FeedNotification, actor: string): Description {
-  switch (notification.kind) {
-    case "discussion-reply": {
-      const data = notification.data;
-      return {
-        title: `${actor} replied to your question in ${data.lessonTitle}`,
-        snippet: `“${data.snippet}”`,
-        categoryIcon: "discussion",
-      };
-    }
-    case "discussion-question": {
-      const data = notification.data;
-      return {
-        title: `${actor} asked a question in ${data.lessonTitle}`,
-        snippet: `“${data.snippet}”`,
-        categoryIcon: "discussion",
-      };
-    }
-    case "refund-request-confirmation": {
-      const data = notification.data;
-      return {
-        title: `Your refund request for ${data.courseTitle} is under review`,
-        snippet: `${formatPrice(data.amount)} · We'll let you know once it's decided.`,
-        categoryIcon: "refund",
-      };
-    }
-    case "open-refund-request": {
-      const data = notification.data;
-      return {
-        title: `${data.buyerName} requested a ${formatPrice(data.amount)} refund for ${data.courseTitle}`,
-        snippet: `“${data.reason}”`,
-        categoryIcon: "refund",
-      };
-    }
-    case "refund-request-approved": {
-      const data = notification.data;
-      const note = data.decisionNote ? ` “${data.decisionNote}”` : "";
-      return {
-        title: `Your refund for ${data.courseTitle} was approved`,
-        snippet: `${formatPrice(data.amount)} for Purchase #${data.purchaseId} is on its way back to you.${note}`,
-        categoryIcon: "refund",
-      };
-    }
-    case "refund-request-declined": {
-      const data = notification.data;
-      return {
-        title: `Your refund request for ${data.courseTitle} was declined`,
-        snippet: `“${data.decisionNote}” You can raise a new refund request.`,
-        categoryIcon: "refund",
-      };
-    }
-    case "seat-claimed": {
-      const data = notification.data;
+const PRESENTERS: { [K in NotificationKind]: KindPresenter<K> } = {
+  "discussion-reply": {
+    icon: "discussion",
+    text: (data, actor) => ({
+      title: `${actor} replied to your question in ${data.lessonTitle}`,
+      snippet: `“${data.snippet}”`,
+    }),
+    href: commentHref,
+  },
+  "discussion-question": {
+    icon: "discussion",
+    text: (data, actor) => ({
+      title: `${actor} asked a question in ${data.lessonTitle}`,
+      snippet: `“${data.snippet}”`,
+    }),
+    href: commentHref,
+  },
+  "seat-claimed": {
+    icon: "team",
+    text: (data, actor) => {
       const left = data.seatsLeft;
       return {
         title: `${actor} claimed a Seat on ${data.courseTitle}`,
@@ -140,24 +84,83 @@ function describe(notification: FeedNotification, actor: string): Description {
           left === 0
             ? "No Seats left"
             : `${left} ${left === 1 ? "Seat" : "Seats"} left`,
-        categoryIcon: "team",
       };
-    }
-    case "new-enrollment": {
-      const data = notification.data;
+    },
+    href: () => "/team",
+  },
+  "new-enrollment": {
+    icon: "enrollment",
+    text: (data, actor) => ({
+      title: `${actor} enrolled in ${data.courseTitle}`,
+      snippet: null,
+    }),
+    // The course's Students list, where the new Student now appears.
+    href: (data) => `/instructor/${data.courseId}/students`,
+  },
+  "refund-request-confirmation": {
+    icon: "refund",
+    text: (data) => ({
+      title: `Your refund request for ${data.courseTitle} is under review`,
+      snippet: `${formatPrice(data.amount)} · We'll let you know once it's decided.`,
+    }),
+    // Only marks it read: the buyer has nothing to do while it is reviewed.
+    href: () => null,
+  },
+  "open-refund-request": {
+    icon: "refund",
+    text: (data) => ({
+      title: `${data.buyerName} requested a ${formatPrice(data.amount)} refund for ${data.courseTitle}`,
+      snippet: `“${data.reason}”`,
+    }),
+    href: () => "/admin/refunds",
+  },
+  "refund-request-approved": {
+    icon: "refund",
+    text: (data) => {
+      const note = data.decisionNote ? ` “${data.decisionNote}”` : "";
       return {
-        title: `${actor} enrolled in ${data.courseTitle}`,
-        snippet: null,
-        categoryIcon: "enrollment",
+        title: `Your refund for ${data.courseTitle} was approved`,
+        snippet: `${formatPrice(data.amount)} for Purchase #${data.purchaseId} is on its way back to you.${note}`,
       };
-    }
-    default: {
-      // Once every kind has a case, the whole notification narrows to never.
-      const unhandled: never = notification;
-      const kind = (unhandled as { kind: string }).kind;
-      throw new Error(`No presenter for Notification kind ${kind}`);
-    }
-  }
+    },
+    // The buyer's Refund Requests, with their decision notes.
+    href: () => "/settings",
+  },
+  "refund-request-declined": {
+    icon: "refund",
+    text: (data) => ({
+      title: `Your refund request for ${data.courseTitle} was declined`,
+      snippet: `“${data.decisionNote}” You can raise a new refund request.`,
+    }),
+    href: () => "/settings",
+  },
+};
+
+/** Kind and data, still paired. */
+type KindAndData<K extends NotificationKind = NotificationKind> = {
+  kind: K;
+  data: NotificationDataByKind[K];
+};
+
+/**
+ * Where a Notification leads, or null when it goes nowhere. Also used by the
+ * Knock adapter for the workflow's action URL.
+ */
+export function notificationHref<K extends NotificationKind>(
+  notification: KindAndData<K>
+): string | null {
+  return PRESENTERS[notification.kind].href(notification.data);
+}
+
+function describe<K extends NotificationKind>(
+  notification: KindAndData<K>,
+  actor: string
+): Pick<NotificationRow, "title" | "snippet" | "categoryIcon"> {
+  const presenter = PRESENTERS[notification.kind];
+  return {
+    ...presenter.text(notification.data, actor),
+    categoryIcon: presenter.icon,
+  };
 }
 
 export function timeAgo(insertedAt: string, now: Date): string {

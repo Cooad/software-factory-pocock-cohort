@@ -11,10 +11,8 @@ import type {
   FeedUpdate,
   NotificationFeedClient,
 } from "~/lib/notification-feed";
-import type {
-  NotificationFeedCredentials,
-  NotificationKind,
-} from "~/lib/notifications";
+import type { NotificationFeedCredentials } from "~/lib/notifications";
+import { kindForWorkflow } from "~/lib/notifications.knock";
 
 // ─── Notifications: Knock client adapter (browser only) ───
 // The only browser code that talks to Knock. Uses the official
@@ -32,20 +30,8 @@ const PAGE_SIZE = 20;
 const FETCH_ATTEMPTS = 10;
 const FETCH_RETRY_MS = 250;
 
-/** Knock workflow key -> Cadence Notification kind. Unknown keys are hidden. */
-const KIND_BY_WORKFLOW: Record<string, NotificationKind> = {
-  "discussion-reply": "discussion-reply",
-  "discussion-question": "discussion-question",
-  "seat-claimed": "seat-claimed",
-  "new-enrollment": "new-enrollment",
-  "refund-request-confirmation": "refund-request-confirmation",
-  "open-refund-request": "open-refund-request",
-  "refund-request-approved": "refund-request-approved",
-  "refund-request-declined": "refund-request-declined",
-};
-
 function toNotification(item: FeedItem): FeedNotification | null {
-  const kind = KIND_BY_WORKFLOW[item.source.key];
+  const kind = kindForWorkflow(item.source.key);
   if (!kind || !item.data) return null;
   const actor = item.actors[0];
   return {
