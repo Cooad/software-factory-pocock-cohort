@@ -2,6 +2,9 @@ import { Outlet } from "react-router";
 import type { Route } from "./+types/layout.app";
 import { Sidebar } from "~/components/sidebar";
 import { DevUI } from "~/components/dev-ui";
+import { NotificationBell } from "~/components/notification-bell";
+import { defaultNotifier } from "~/lib/notifications.server";
+import type { NotificationFeedCredentials } from "~/lib/notifications";
 import { Toaster } from "sonner";
 import { getCurrentUserId, getDevCountry } from "~/lib/session";
 import { getCountryTierInfo, COUNTRIES } from "~/lib/ppp";
@@ -18,6 +21,22 @@ import {
   TeamMemberRole,
   LessonProgressStatus,
 } from "~/db/schema";
+
+/**
+ * Signs the session user's Notification Feed credentials on every render of
+ * the app shell, so switching users in the DevUI switches the feed. Null
+ * credentials (no Knock keys, or signing failed) give an empty feed.
+ */
+async function getNotificationFeedCredentials(
+  userId: number
+): Promise<NotificationFeedCredentials | null> {
+  try {
+    return await defaultNotifier().feedCredentials(userId);
+  } catch (error) {
+    console.error("[notifications] could not sign feed credentials", error);
+    return null;
+  }
+}
 
 function getAllUsers() {
   return db.select().from(users).all();
@@ -213,6 +232,9 @@ export async function loader({ request }: Route.LoaderArgs) {
     countryTierInfo,
     countries: COUNTRIES,
     isTeamAdmin: currentUserId ? isTeamAdmin(currentUserId) : false,
+    notificationFeed: currentUser
+      ? { credentials: await getNotificationFeedCredentials(currentUser.id) }
+      : null,
   };
 }
 
@@ -225,6 +247,7 @@ export default function AppLayout({ loaderData }: Route.ComponentProps) {
     countryTierInfo,
     countries,
     isTeamAdmin: userIsTeamAdmin,
+    notificationFeed,
   } = loaderData;
 
   return (
@@ -233,6 +256,11 @@ export default function AppLayout({ loaderData }: Route.ComponentProps) {
         currentUser={currentUser}
         recentCourses={recentCourses}
         isTeamAdmin={userIsTeamAdmin}
+        headerSlot={
+          notificationFeed ? (
+            <NotificationBell credentials={notificationFeed.credentials} />
+          ) : null
+        }
       />
       <main className="flex-1 overflow-y-auto">
         <Outlet />
