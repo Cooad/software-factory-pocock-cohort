@@ -19,11 +19,58 @@ import { formatPrice } from "~/lib/utils";
 import { listRefundRequestsForBuyer } from "~/lib/refunds.server";
 import { updateOwnProfile } from "~/lib/users.server";
 import { defaultNotifier } from "~/lib/notifications.server";
+import {
+  getNotificationSettings,
+  savePreference,
+  type NotificationSetting,
+} from "~/lib/notification-settings.server";
+import {
+  PREFERENCE_CATEGORIES,
+  type PreferenceCategory,
+} from "~/lib/notification-preferences";
+import { Switch } from "~/components/ui/switch";
 
 const settingsSchema = z.object({
   name: z.string().trim().min(1, "Name cannot be empty."),
   bio: z.string().trim().optional(),
 });
+
+const SAVE_NOTIFICATION_PREFERENCE = "save-notification-preference";
+
+const notificationPreferenceSchema = z.object({
+  category: z.enum(PREFERENCE_CATEGORIES),
+  enabled: z.enum(["true", "false"]).transform((value) => value === "true"),
+});
+
+const PREFERENCE_LABELS: Record<
+  PreferenceCategory,
+  { label: string; description: string }
+> = {
+  "refund-request-updates": {
+    label: "Refund Request updates",
+    description: "When your Refund Request is received, approved or declined.",
+  },
+  "open-refund-requests": {
+    label: "Open Refund Requests",
+    description: "When someone raises a Refund Request that needs a decision.",
+  },
+  "seat-claims": {
+    label: "Seat claims",
+    description: "When someone claims a Seat on one of your Team Licences.",
+  },
+  enrollments: {
+    label: "Enrollments",
+    description: "When a Student enrolls in one of your courses.",
+  },
+  "discussion-questions": {
+    label: "Discussion Questions",
+    description: "When someone asks a question on one of your lessons.",
+  },
+  "discussion-replies": {
+    label: "Discussion Replies",
+    description: "When someone replies to a question you asked.",
+  },
+};
 
 export function meta() {
   return [
@@ -53,6 +100,19 @@ export async function loader({ request }: Route.LoaderArgs) {
 
   const refundRequests = listRefundRequestsForBuyer(db, currentUserId);
 
+  // Notifications are best-effort: if the vendor is down the rest of the page
+  // still loads, and the card says it couldn't load.
+  let notificationSettings: NotificationSetting[] | null = null;
+  try {
+    notificationSettings = await getNotificationSettings(
+      db,
+      defaultNotifier(),
+      currentUserId
+    );
+  } catch (error) {
+    console.error("[notifications] loading preferences failed:", error);
+  }
+
   return {
     user: {
       id: currentUser.id,
@@ -62,6 +122,7 @@ export async function loader({ request }: Route.LoaderArgs) {
       role: currentUser.role,
     },
     refundRequests,
+    notificationSettings,
   };
 }
 
@@ -82,6 +143,32 @@ export async function action({ request }: Route.ActionArgs) {
   }
 
   const formData = await request.formData();
+
+  if (formData.get("intent") === SAVE_NOTIFICATION_PREFERENCE) {
+    const preference = parseFormData(formData, notificationPreferenceSchema);
+    if (!preference.success) {
+      return data(
+        { preferenceError: "That setting can't be saved." },
+        { status: 400 }
+      );
+    }
+    try {
+      await savePreference(
+        defaultNotifier(),
+        currentUser.id,
+        preference.data.category,
+        preference.data.enabled
+      );
+    } catch (error) {
+      console.error("[notifications] saving a preference failed:", error);
+      return data(
+        { preferenceError: "Couldn't save your notification setting. Try again." },
+        { status: 502 }
+      );
+    }
+    return { preferenceSaved: true };
+  }
+
   const parsed = parseFormData(formData, settingsSchema);
 
   if (!parsed.success) {
@@ -101,7 +188,7 @@ export async function action({ request }: Route.ActionArgs) {
 }
 
 export default function Settings({ loaderData }: Route.ComponentProps) {
-  const { user, refundRequests } = loaderData;
+  const { user, refundRequests, notificationSettings } = loaderData;
   const openCount = refundRequests.filter(
     (refundRequest) => refundRequest.status === RefundStatus.Open
   ).length;
@@ -191,6 +278,8 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
         </CardContent>
       </Card>
 
+      <NotificationsCard settings={notificationSettings} />
+
       {refundRequests.length > 0 && (
         <Card className="mt-8 max-w-md">
           <CardHeader>
@@ -238,6 +327,81 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
           </CardContent>
         </Card>
       )}
+    </div>
+  );
+}
+
+function NotificationsCard({
+  settings,
+}: {
+  settings: NotificationSetting[] | null;
+}) {
+  return (
+    <Card id="notifications" className="mt-8 max-w-md scroll-mt-6">
+      <CardHeader>
+        <h2 className="text-lg font-semibold">Notifications</h2>
+        <p className="text-sm text-muted-foreground">
+          Choose what shows up in your Notification Feed.
+        </p>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {settings === null ? (
+          <p className="text-sm text-muted-foreground">
+            Your notification settings couldn't be loaded. Try again later.
+          </p>
+        ) : (
+          settings.map((setting) => (
+            <NotificationSwitch key={setting.category} setting={setting} />
+          ))
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+/**
+ * One switch, saved as soon as it's flipped. It shows the submitted value
+ * while saving (optimistic). A failed save shows a toast and falls back to the
+ * stored value, which puts the switch back.
+ */
+function NotificationSwitch({ setting }: { setting: NotificationSetting }) {
+  const fetcher = useFetcher<typeof action>({
+    key: `notification-preference-${setting.category}`,
+  });
+  const { label, description } = PREFERENCE_LABELS[setting.category];
+  const id = `notification-${setting.category}`;
+  const submitted = fetcher.formData?.get("enabled");
+  const checked =
+    typeof submitted === "string" ? submitted === "true" : setting.enabled;
+  const error =
+    fetcher.data && "preferenceError" in fetcher.data
+      ? fetcher.data.preferenceError
+      : undefined;
+
+  useEffect(() => {
+    if (fetcher.state === "idle" && error) toast.error(error);
+  }, [fetcher.state, fetcher.data, error]);
+
+  return (
+    <div className="flex items-start justify-between gap-4">
+      <div className="space-y-1">
+        <Label htmlFor={id}>{label}</Label>
+        <p className="text-xs text-muted-foreground">{description}</p>
+      </div>
+      <Switch
+        id={id}
+        checked={checked}
+        onCheckedChange={(enabled) =>
+          fetcher.submit(
+            {
+              intent: SAVE_NOTIFICATION_PREFERENCE,
+              category: setting.category,
+              enabled: String(enabled),
+            },
+            { method: "post" }
+          )
+        }
+      />
     </div>
   );
 }

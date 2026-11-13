@@ -5,13 +5,14 @@ import {
   useRef,
   useState,
 } from "react";
-import { useNavigate } from "react-router";
+import { Link, useNavigate } from "react-router";
 import {
   Bell,
   Check,
   GraduationCap,
   MessageSquare,
   Receipt,
+  Settings,
   UsersRound,
 } from "lucide-react";
 import { UserAvatar } from "~/components/user-avatar";
@@ -196,6 +197,15 @@ function FeedBell({ client }: { client: NotificationFeedClient }) {
               >
                 Mark all as read
               </button>
+              <Link
+                to="/settings#notifications"
+                onClick={() => setOpen(false)}
+                aria-label="Notification settings"
+                title="Notification settings"
+                className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+              >
+                <Settings className="size-4" />
+              </Link>
             </div>
             <FeedList
               rows={state.notifications.map((n) =>
