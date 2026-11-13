@@ -1,5 +1,12 @@
 import { and, eq, isNull } from "drizzle-orm";
-import { coupons, courses, enrollments, purchases, users } from "~/db/schema";
+// The table is still called `coupons`; in Cadence's language each row is a Seat.
+import {
+  coupons as seats,
+  courses,
+  enrollments,
+  purchases,
+  users,
+} from "~/db/schema";
 import {
   ALREADY_ENROLLED,
   createEnrollment,
@@ -23,7 +30,7 @@ export const SEAT_ON_HOLD =
 export const SEAT_REFUNDED =
   "This seat is no longer available. Ask the person who shared it with you.";
 
-type Seat = typeof coupons.$inferSelect;
+type Seat = typeof seats.$inferSelect;
 type Enrollment = typeof enrollments.$inferSelect;
 
 export type ClaimSeatResult =
@@ -46,13 +53,13 @@ function getPerson(db: Db, userId: number): NotificationPerson | undefined {
 /** Seats on the Team Licence that are neither claimed nor refunded. */
 function countSeatsLeft(db: Db, purchaseId: number): number {
   return db
-    .select({ id: coupons.id })
-    .from(coupons)
+    .select({ id: seats.id })
+    .from(seats)
     .where(
       and(
-        eq(coupons.purchaseId, purchaseId),
-        isNull(coupons.redeemedAt),
-        isNull(coupons.refundedAt)
+        eq(seats.purchaseId, purchaseId),
+        isNull(seats.redeemedAt),
+        isNull(seats.refundedAt)
       )
     )
     .all().length;
@@ -101,18 +108,19 @@ async function notifySeatClaimed(db: Db, notifier: Notifier, seat: Seat) {
 export async function claimSeat(
   db: Db,
   notifier: Notifier,
-  code: string,
+  /** The code in the Seat's claim link (`/redeem/:code`). */
+  seatCode: string,
   userId: number,
   userCountry: string,
   now: Date
 ): Promise<ClaimSeatResult> {
-  const seat = db.select().from(coupons).where(eq(coupons.code, code)).get();
+  const seat = db.select().from(seats).where(eq(seats.code, seatCode)).get();
   if (!seat) {
-    return { ok: false, error: "Coupon not found" };
+    return { ok: false, error: "Seat not found" };
   }
 
   if (seat.redeemedByUserId !== null) {
-    return { ok: false, error: "Coupon has already been redeemed" };
+    return { ok: false, error: "This Seat has already been claimed" };
   }
 
   const availability = getSeatAvailability(db, seat);
@@ -138,7 +146,7 @@ export async function claimSeat(
     return {
       ok: false,
       error:
-        "This coupon can only be redeemed from the same country as the purchaser",
+        "This Seat can only be claimed from the country its Team Licence was bought in",
     };
   }
 
@@ -152,9 +160,9 @@ export async function claimSeat(
   if (!enrolled.ok) return enrolled;
 
   const claimed = db
-    .update(coupons)
+    .update(seats)
     .set({ redeemedByUserId: userId, redeemedAt: now.toISOString() })
-    .where(eq(coupons.id, seat.id))
+    .where(eq(seats.id, seat.id))
     .returning()
     .get();
 
