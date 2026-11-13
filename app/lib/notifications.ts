@@ -26,8 +26,25 @@ export type DiscussionReplyData = {
   snippet: string;
 };
 
+/**
+ * Data for Notification 6, sent to a course's Instructor when someone else asks
+ * a Discussion Question on one of its lessons. Flat scalars, like
+ * `DiscussionReplyData`, so archiving on delete can find it by `commentId`.
+ */
+export type DiscussionQuestionData = {
+  /** The Discussion Question. */
+  commentId: number;
+  courseSlug: string;
+  courseTitle: string;
+  lessonId: number;
+  lessonTitle: string;
+  /** The start of the question's body, frozen when it was sent. */
+  snippet: string;
+};
+
 export type NotificationDataByKind = {
   "discussion-reply": DiscussionReplyData;
+  "discussion-question": DiscussionQuestionData;
 };
 
 export type NotificationKind = keyof NotificationDataByKind;

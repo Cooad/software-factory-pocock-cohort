@@ -46,6 +46,12 @@ export interface Notifier {
    * feed (the browser then shows an empty one).
    */
   feedCredentials(userId: number): Promise<NotificationFeedCredentials | null>;
+  /**
+   * Archives every Notification a comment caused (the ones whose trigger data
+   * has this `commentId`), taking them out of their recipients' feeds. Used when
+   * a Discussion Question or Reply is soft-deleted.
+   */
+  archiveCausedByComment(commentId: number): Promise<void>;
 }
 
 /**
@@ -66,6 +72,21 @@ export async function notifySafely(
   }
 }
 
+/** Archives a comment's Notifications without ever failing the caller. */
+export async function archiveCausedByCommentSafely(
+  notifier: Notifier,
+  commentId: number
+): Promise<void> {
+  try {
+    await notifier.archiveCausedByComment(commentId);
+  } catch (error) {
+    console.error(
+      `[notifications] archiving for comment ${commentId} failed:`,
+      error
+    );
+  }
+}
+
 export function loggingNotifier(): Notifier {
   return {
     async trigger(notification) {
@@ -77,6 +98,11 @@ export function loggingNotifier(): Notifier {
     },
     async feedCredentials() {
       return null;
+    },
+    async archiveCausedByComment(commentId) {
+      console.info(
+        `[notifications] (no KNOCK_SECRET_API_KEY, not sent) archive for comment ${commentId}`
+      );
     },
   };
 }

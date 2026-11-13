@@ -12,10 +12,7 @@ import type { FeedNotification } from "~/lib/notification-feed";
 
 /** Mapped to a lucide icon by the row component. */
 export type NotificationCategoryIcon =
-  | "discussion"
-  | "refund"
-  | "team"
-  | "enrollment";
+  "discussion" | "refund" | "team" | "enrollment";
 
 export type NotificationAvatar =
   | { kind: "sender"; name: string; avatarUrl: string | null }
@@ -48,6 +45,10 @@ export function notificationHref(notification: KindAndData): string | null {
       const data = notification.data;
       return `/courses/${data.courseSlug}/lessons/${data.lessonId}#comment-${data.commentId}`;
     }
+    case "discussion-question": {
+      const data = notification.data;
+      return `/courses/${data.courseSlug}/lessons/${data.lessonId}#comment-${data.commentId}`;
+    }
     default: {
       const unhandled: never = notification.kind;
       throw new Error(`No link for Notification kind ${unhandled}`);
@@ -65,9 +66,20 @@ function describe(notification: FeedNotification, actor: string): Description {
         categoryIcon: "discussion",
       };
     }
+    case "discussion-question": {
+      const data = notification.data;
+      return {
+        title: `${actor} asked a question in ${data.lessonTitle}`,
+        snippet: `“${data.snippet}”`,
+        categoryIcon: "discussion",
+      };
+    }
     default: {
-      const unhandled: never = notification.kind;
-      throw new Error(`No presenter for Notification kind ${unhandled}`);
+      // Every kind is handled, so `notification` is `never` here.
+      const unhandled: never = notification;
+      throw new Error(
+        `No presenter for Notification kind ${(unhandled as FeedNotification).kind}`
+      );
     }
   }
 }
