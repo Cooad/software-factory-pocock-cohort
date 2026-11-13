@@ -1,4 +1,18 @@
 import { Outlet } from "react-router";
+import { useState } from "react";
+import { knockClientConfig, kindsForRole } from "~/lib/prototype-knock.server";
+import {
+  useKnockFeed,
+  useFeedVariant,
+  FEED_VARIANTS,
+  VariantABell,
+  VariantBNavItem,
+  VariantBDrawer,
+  VariantCNavItem,
+  VariantCToasts,
+  PrototypeSeedPanel,
+} from "~/components/prototype-notification-feed";
+import { PrototypeSwitcher } from "~/components/prototype-switcher";
 import type { Route } from "./+types/layout.app";
 import { Sidebar } from "~/components/sidebar";
 import { DevUI } from "~/components/dev-ui";
@@ -213,6 +227,11 @@ export async function loader({ request }: Route.LoaderArgs) {
     countryTierInfo,
     countries: COUNTRIES,
     isTeamAdmin: currentUserId ? isTeamAdmin(currentUserId) : false,
+    // PROTOTYPE (#16)
+    knock: currentUserId ? knockClientConfig(currentUserId) : null,
+    sampleKinds: currentUser
+      ? kindsForRole(currentUser.role, isTeamAdmin(currentUser.id))
+      : [],
   };
 }
 
@@ -225,7 +244,14 @@ export default function AppLayout({ loaderData }: Route.ComponentProps) {
     countryTierInfo,
     countries,
     isTeamAdmin: userIsTeamAdmin,
+    knock,
+    sampleKinds,
   } = loaderData;
+
+  // PROTOTYPE (#16): Notification Feed variants
+  const feed = useKnockFeed(knock);
+  const variant = useFeedVariant();
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   return (
     <div className="flex h-screen overflow-hidden">
@@ -233,10 +259,24 @@ export default function AppLayout({ loaderData }: Route.ComponentProps) {
         currentUser={currentUser}
         recentCourses={recentCourses}
         isTeamAdmin={userIsTeamAdmin}
+        headerSlot={knock && variant === "A" ? <VariantABell feed={feed} /> : null}
+        navSlot={
+          !knock ? null : variant === "B" ? (
+            <VariantBNavItem feed={feed} onOpen={() => setDrawerOpen(true)} />
+          ) : variant === "C" ? (
+            <VariantCNavItem feed={feed} />
+          ) : null
+        }
       />
       <main className="flex-1 overflow-y-auto">
-        <Outlet />
+        <Outlet context={{ feed }} />
       </main>
+      {knock && variant === "B" && (
+        <VariantBDrawer feed={feed} open={drawerOpen} onClose={() => setDrawerOpen(false)} />
+      )}
+      {knock && variant === "C" && <VariantCToasts feed={feed} />}
+      {knock && <PrototypeSeedPanel kinds={sampleKinds} feed={feed} />}
+      <PrototypeSwitcher variants={FEED_VARIANTS} current={variant} />
       <DevUI
         users={users}
         currentUser={currentUser}
