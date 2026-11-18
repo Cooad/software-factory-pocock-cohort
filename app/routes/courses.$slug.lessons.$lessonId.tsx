@@ -7,7 +7,7 @@ import {
   requireContentAccess,
   requireUserId,
 } from "~/modules/course-access/request.server";
-import { isEnrolled } from "~/lib/enrollments.server";
+import type { CourseAccessDecision } from "~/modules/course-access/index.server";
 import { renderComment } from "~/lib/comment-markdown.server";
 import { markdown, type Markdown } from "~/lib/text";
 import {
@@ -57,6 +57,8 @@ import {
   BookmarkCheck,
   Github,
   HelpCircle,
+  Lock,
+  LogIn,
   NotebookPen,
   MapPin,
   PlayCircle,
@@ -640,6 +642,36 @@ function flattenCourseLessons(course: {
   return flat;
 }
 
+type Paywall =
+  | { kind: "signed-out" }
+  | { kind: "not-enrolled" }
+  | {
+      kind: "region-locked";
+      purchaseCountryName: string;
+      currentCountryName: string;
+    };
+
+/** The paywall for a viewer without Course Access. */
+function toPaywall(
+  decision: Exclude<CourseAccessDecision, { kind: "allowed" }>
+): Paywall {
+  switch (decision.kind) {
+    case "signed-out":
+      return { kind: "signed-out" };
+    case "not-enrolled":
+      return { kind: "not-enrolled" };
+    case "region-locked":
+      return {
+        kind: "region-locked",
+        purchaseCountryName: countryName(decision.purchaseCountry),
+        currentCountryName: countryName(decision.currentCountry),
+      };
+    case "course-not-found":
+      // The loader found the course a moment ago; it was deleted since.
+      throw data("Course not found", { status: 404 });
+  }
+}
+
 export async function loader({ params, request }: Route.LoaderArgs) {
   const slug = params.slug;
   const lessonId = Number(params.lessonId);
@@ -677,67 +709,60 @@ export async function loader({ params, request }: Route.LoaderArgs) {
     request,
     course.id
   );
-  const currentUserId = decision.kind === "signed-out" ? null : viewer.userId;
-  const enrolled =
-    currentUserId !== null && isEnrolled(db, currentUserId, course.id);
-  let lessonStatus: string | null = null;
+
+  // Without Course Access the page is a paywall: nothing of the lesson's
+  // content (body, video, quiz, discussion, Bookmarks, Notes) is sent, and
+  // the lesson isn't marked in progress.
+  if (decision.kind !== "allowed") {
+    return {
+      paywall: toPaywall(decision),
+      course: {
+        id: courseWithDetails.id,
+        title: courseWithDetails.title,
+        slug: courseWithDetails.slug,
+      },
+      lesson: { id: lesson.id, title: lesson.title },
+    };
+  }
+
+  // Course Access means someone is signed in.
+  const currentUserId = viewer.userId!;
   let lastWatchPosition = 0;
   let watchProgress = 0;
-  let lessonProgressMap: Record<number, string> = {};
+  const lessonProgressMap: Record<number, string> = {};
 
-  if (currentUserId) {
-    if (enrolled) {
-      // Mark lesson as in-progress when viewed
-      markLessonInProgress(currentUserId, lessonId);
-      const progress = getLessonProgress(currentUserId, lessonId);
-      lessonStatus = progress?.status ?? null;
+  // Mark lesson as in-progress when viewed
+  markLessonInProgress(currentUserId, lessonId);
+  const progress = getLessonProgress(currentUserId, lessonId);
+  const lessonStatus: string | null = progress?.status ?? null;
 
-      // Get progress for all lessons in course (for curriculum sidebar)
-      const progressRecords = getLessonProgressForCourse(
+  // Get progress for all lessons in course (for curriculum sidebar)
+  const progressRecords = getLessonProgressForCourse(currentUserId, course.id);
+  for (const record of progressRecords) {
+    lessonProgressMap[record.lessonId] = record.status;
+  }
+
+  // Get video watch state for resume and progress display
+  if (lesson.videoUrl) {
+    lastWatchPosition = getLastWatchPosition(currentUserId, lessonId);
+    const videoDurationSeconds = (lesson.durationMinutes ?? 0) * 60;
+    if (videoDurationSeconds > 0) {
+      watchProgress = calculateWatchProgress(
         currentUserId,
-        course.id
+        lessonId,
+        videoDurationSeconds
       );
-      for (const record of progressRecords) {
-        lessonProgressMap[record.lessonId] = record.status;
-      }
-
-      // Get video watch state for resume and progress display
-      if (lesson.videoUrl) {
-        lastWatchPosition = getLastWatchPosition(currentUserId, lessonId);
-        const videoDurationSeconds = (lesson.durationMinutes ?? 0) * 60;
-        if (videoDurationSeconds > 0) {
-          watchProgress = calculateWatchProgress(
-            currentUserId,
-            lessonId,
-            videoDurationSeconds
-          );
-        }
-      }
     }
   }
 
-  // A Region-Locked Student has no Course Access, so sees none of the
-  // course's content.
-  const canViewContent = decision.kind === "allowed";
-  const regionLock = decision.kind === "region-locked" ? decision : null;
-
-  // Comments are confidential to the course: only people who can read the
-  // lesson can read the discussion on it.
+  // Comments are confidential to the course: only people with Course Access
+  // can read the discussion on it.
   const instructor = getUserById(course.instructorId);
-  const comments = canViewContent
-    ? await renderThread(getLessonThread(lessonId))
-    : [];
+  const comments = await renderThread(getLessonThread(lessonId));
 
-  // The Student's own Bookmark and Note on this lesson, behind the same
-  // content-access bar as the discussion. A signed-out visitor gets neither.
-  const bookmarked =
-    canViewContent && currentUserId
-      ? isBookmarked(db, currentUserId, lessonId)
-      : false;
-  const note =
-    canViewContent && currentUserId
-      ? getNote(db, currentUserId, lessonId)
-      : undefined;
+  // The Student's own Bookmark and Note on this lesson.
+  const bookmarked = isBookmarked(db, currentUserId, lessonId);
+  const note = getNote(db, currentUserId, lessonId);
 
   // Render lesson content from Markdown to HTML server-side
   const contentHtml = lesson.content
@@ -788,15 +813,14 @@ export async function loader({ params, request }: Route.LoaderArgs) {
       };
     }
 
-    if (currentUserId) {
-      const best = getBestAttempt(currentUserId, quizRecord.id);
-      if (best) {
-        bestAttempt = { score: best.score, passed: best.passed };
-      }
+    const best = getBestAttempt(currentUserId, quizRecord.id);
+    if (best) {
+      bestAttempt = { score: best.score, passed: best.passed };
     }
   }
 
   return {
+    paywall: null,
     course: {
       id: courseWithDetails.id,
       title: courseWithDetails.title,
@@ -817,7 +841,6 @@ export async function loader({ params, request }: Route.LoaderArgs) {
     lesson,
     contentHtml,
     lessonStatus,
-    enrolled,
     currentUserId,
     prevLesson,
     nextLesson,
@@ -826,14 +849,7 @@ export async function loader({ params, request }: Route.LoaderArgs) {
     lastWatchPosition,
     watchProgress,
     lessonProgressMap,
-    regionLock: regionLock
-      ? {
-          purchaseCountryName: countryName(regionLock.purchaseCountry),
-          currentCountryName: countryName(regionLock.currentCountry),
-        }
-      : null,
     comments,
-    canViewContent,
     canManage,
     instructorName: instructor?.name ?? "your instructor",
     bookmarked,
@@ -1025,7 +1041,26 @@ function useAutoplay() {
   return [enabled, toggle] as const;
 }
 
+type LessonLoaderData = Route.ComponentProps["loaderData"];
+
 export default function LessonViewer({ loaderData }: Route.ComponentProps) {
+  if (loaderData.paywall !== null) {
+    return (
+      <LessonPaywall
+        paywall={loaderData.paywall}
+        course={loaderData.course}
+        lesson={loaderData.lesson}
+      />
+    );
+  }
+  return <LessonPage loaderData={loaderData} />;
+}
+
+function LessonPage({
+  loaderData,
+}: {
+  loaderData: Extract<LessonLoaderData, { paywall: null }>;
+}) {
   const {
     course,
     curriculum,
@@ -1033,7 +1068,6 @@ export default function LessonViewer({ loaderData }: Route.ComponentProps) {
     lesson,
     contentHtml,
     lessonStatus,
-    enrolled,
     currentUserId,
     prevLesson,
     nextLesson,
@@ -1042,9 +1076,7 @@ export default function LessonViewer({ loaderData }: Route.ComponentProps) {
     lastWatchPosition,
     watchProgress,
     lessonProgressMap,
-    regionLock,
     comments,
-    canViewContent,
     canManage,
     instructorName,
     bookmarked,
@@ -1074,37 +1106,6 @@ export default function LessonViewer({ loaderData }: Route.ComponentProps) {
   const quizResult = quizFetcher.data?.quizResult ?? null;
   const isSubmittingQuiz = quizFetcher.state !== "idle";
 
-  if (regionLock) {
-    const { purchaseCountryName, currentCountryName } = regionLock;
-
-    return (
-      <div className="flex min-h-[60vh] items-center justify-center p-6">
-        <div className="max-w-md text-center">
-          <ShieldAlert className="mx-auto mb-4 size-16 text-amber-500" />
-          <h1 className="mb-3 text-2xl font-bold">Access Restricted</h1>
-          <p className="mb-4 text-muted-foreground">
-            You purchased this course with a Purchasing Power Parity discount
-            while in <strong>{purchaseCountryName}</strong>, but you're
-            currently accessing from <strong>{currentCountryName}</strong>.
-          </p>
-          <p className="mb-6 text-sm text-muted-foreground">
-            PPP-discounted courses can only be accessed from the country where
-            the purchase was made. This helps keep courses affordable for
-            students in lower-income regions.
-          </p>
-          <div className="flex items-center justify-center gap-3">
-            <Link to={`/courses/${course.slug}`}>
-              <Button variant="outline">
-                <MapPin className="mr-2 size-4" />
-                Back to Course
-              </Button>
-            </Link>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="flex">
       {/* Curriculum Sidebar */}
@@ -1113,7 +1114,6 @@ export default function LessonViewer({ loaderData }: Route.ComponentProps) {
         curriculum={curriculum}
         currentLessonId={lesson.id}
         lessonProgressMap={lessonProgressMap}
-        enrolled={enrolled}
       />
 
       <div className="flex-1 p-6 lg:p-8">
@@ -1144,9 +1144,7 @@ export default function LessonViewer({ loaderData }: Route.ComponentProps) {
           {/* Lesson Title */}
           <div className="mb-2 flex items-start justify-between gap-3">
             <h1 className="text-3xl font-bold">{lesson.title}</h1>
-            {canViewContent && currentUserId && (
-              <BookmarkToggle bookmarked={bookmarked} />
-            )}
+            <BookmarkToggle bookmarked={bookmarked} />
           </div>
           <div className="mb-6 flex items-center gap-3">
             {lesson.durationMinutes && (
@@ -1178,14 +1176,14 @@ export default function LessonViewer({ loaderData }: Route.ComponentProps) {
               startPosition={lastWatchPosition}
               durationMinutes={lesson.durationMinutes}
               watchProgress={watchProgress}
-              trackingEnabled={enrolled && !!currentUserId}
+              trackingEnabled
               autoplay={autoplay}
               onToggleAutoplay={toggleAutoplay}
             />
           )}
 
           {/* Note — under the video, so the Student can write while they watch */}
-          {canViewContent && currentUserId && <LessonNote note={note} />}
+          <LessonNote note={note} />
 
           {/* Lesson Content */}
           {contentHtml && (
@@ -1204,7 +1202,7 @@ export default function LessonViewer({ loaderData }: Route.ComponentProps) {
           )}
 
           {/* Quiz Section */}
-          {quiz && enrolled && currentUserId && (
+          {quiz && (
             <QuizSection
               quiz={quiz}
               bestAttempt={bestAttempt}
@@ -1215,61 +1213,55 @@ export default function LessonViewer({ loaderData }: Route.ComponentProps) {
           )}
 
           {/* Mark Complete / Up Next */}
-          {enrolled && currentUserId && (
-            <div className="mb-8">
-              {isCompleted ? (
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-2 text-green-600">
-                    <CheckCircle2 className="size-5" />
-                    <span className="font-medium">Lesson completed</span>
-                  </div>
-                  {nextLesson && (
-                    <Link
-                      to={`/courses/${course.slug}/lessons/${nextLesson.id}`}
-                    >
-                      <Button variant="outline" size="sm">
-                        Up next: {nextLesson.title}
-                        <ChevronRight className="ml-1 size-4" />
-                      </Button>
-                    </Link>
-                  )}
+          <div className="mb-8">
+            {isCompleted ? (
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 text-green-600">
+                  <CheckCircle2 className="size-5" />
+                  <span className="font-medium">Lesson completed</span>
                 </div>
-              ) : nextLesson ? (
-                <fetcher.Form method="post">
-                  <input type="hidden" name="intent" value="mark-complete" />
-                  <Button disabled={isMarking}>
-                    {isMarking ? (
-                      "Completing..."
-                    ) : (
-                      <>
-                        Up next: {nextLesson.title}
-                        <ChevronRight className="ml-1 size-4" />
-                      </>
-                    )}
-                  </Button>
-                </fetcher.Form>
-              ) : (
-                <fetcher.Form method="post">
-                  <input type="hidden" name="intent" value="mark-complete" />
-                  <Button disabled={isMarking}>
-                    <CheckCircle2 className="mr-2 size-4" />
-                    {isMarking ? "Marking..." : "Mark as Complete"}
-                  </Button>
-                </fetcher.Form>
-              )}
-            </div>
-          )}
+                {nextLesson && (
+                  <Link to={`/courses/${course.slug}/lessons/${nextLesson.id}`}>
+                    <Button variant="outline" size="sm">
+                      Up next: {nextLesson.title}
+                      <ChevronRight className="ml-1 size-4" />
+                    </Button>
+                  </Link>
+                )}
+              </div>
+            ) : nextLesson ? (
+              <fetcher.Form method="post">
+                <input type="hidden" name="intent" value="mark-complete" />
+                <Button disabled={isMarking}>
+                  {isMarking ? (
+                    "Completing..."
+                  ) : (
+                    <>
+                      Up next: {nextLesson.title}
+                      <ChevronRight className="ml-1 size-4" />
+                    </>
+                  )}
+                </Button>
+              </fetcher.Form>
+            ) : (
+              <fetcher.Form method="post">
+                <input type="hidden" name="intent" value="mark-complete" />
+                <Button disabled={isMarking}>
+                  <CheckCircle2 className="mr-2 size-4" />
+                  {isMarking ? "Marking..." : "Mark as Complete"}
+                </Button>
+              </fetcher.Form>
+            )}
+          </div>
 
           {/* Questions & Discussion — confidential to people with access */}
-          {canViewContent && (
-            <CommentThread
-              comments={comments}
-              currentUserId={currentUserId}
-              canManage={canManage}
-              canPost
-              instructorName={instructorName}
-            />
-          )}
+          <CommentThread
+            comments={comments}
+            currentUserId={currentUserId}
+            canManage={canManage}
+            canPost
+            instructorName={instructorName}
+          />
 
           {/* Prev/Next Navigation */}
           <div className="flex items-center justify-between border-t pt-6">
@@ -1389,12 +1381,87 @@ function LessonNote({
   );
 }
 
+function LessonPaywall({
+  paywall,
+  course,
+  lesson,
+}: {
+  paywall: Paywall;
+  course: { title: string; slug: string };
+  lesson: { id: number; title: string };
+}) {
+  const coursePath = `/courses/${course.slug}`;
+  const lessonPath = `${coursePath}/lessons/${lesson.id}`;
+
+  return (
+    <div className="flex min-h-[60vh] items-center justify-center p-6">
+      <div className="max-w-md text-center">
+        {paywall.kind === "region-locked" ? (
+          <>
+            <ShieldAlert className="mx-auto mb-4 size-16 text-amber-500" />
+            <h1 className="mb-3 text-2xl font-bold">Access Restricted</h1>
+            <p className="mb-4 text-muted-foreground">
+              You purchased this course with a Purchasing Power Parity discount
+              while in <strong>{paywall.purchaseCountryName}</strong>, but
+              you're currently accessing from{" "}
+              <strong>{paywall.currentCountryName}</strong>.
+            </p>
+            <p className="mb-6 text-sm text-muted-foreground">
+              PPP-discounted courses can only be accessed from the country where
+              the purchase was made. This helps keep courses affordable for
+              students in lower-income regions.
+            </p>
+            <div className="flex items-center justify-center gap-3">
+              <Link to={coursePath}>
+                <Button variant="outline">
+                  <MapPin className="mr-2 size-4" />
+                  Back to Course
+                </Button>
+              </Link>
+            </div>
+          </>
+        ) : paywall.kind === "signed-out" ? (
+          <>
+            <LogIn className="mx-auto mb-4 size-16 text-muted-foreground" />
+            <h1 className="mb-3 text-2xl font-bold">Sign in to continue</h1>
+            <p className="mb-6 text-muted-foreground">
+              Sign in to take <strong>{lesson.title}</strong> from{" "}
+              <strong>{course.title}</strong>.
+            </p>
+            <div className="flex items-center justify-center gap-3">
+              <Link to={coursePath}>
+                <Button variant="outline">Back to Course</Button>
+              </Link>
+              <Link to={`/login?redirectTo=${encodeURIComponent(lessonPath)}`}>
+                <Button>Sign in</Button>
+              </Link>
+            </div>
+          </>
+        ) : (
+          <>
+            <Lock className="mx-auto mb-4 size-16 text-muted-foreground" />
+            <h1 className="mb-3 text-2xl font-bold">Enroll to continue</h1>
+            <p className="mb-6 text-muted-foreground">
+              <strong>{lesson.title}</strong> is part of{" "}
+              <strong>{course.title}</strong>. Enroll in the course to take it.
+            </p>
+            <div className="flex items-center justify-center gap-3">
+              <Link to={coursePath}>
+                <Button>Enroll in the course</Button>
+              </Link>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function CurriculumSidebar({
   course,
   curriculum,
   currentLessonId,
   lessonProgressMap,
-  enrolled,
 }: {
   course: { id: number; title: string; slug: string };
   curriculum: Array<{
@@ -1404,7 +1471,6 @@ function CurriculumSidebar({
   }>;
   currentLessonId: number;
   lessonProgressMap: Record<number, string>;
-  enrolled: boolean;
 }) {
   // Find which module the current lesson belongs to
   const currentModuleId = curriculum.find((m) =>
@@ -1482,14 +1548,10 @@ function CurriculumSidebar({
                                 : "text-muted-foreground hover:bg-muted hover:text-foreground"
                             )}
                           >
-                            {enrolled ? (
-                              isCompleted ? (
-                                <CheckCircle2 className="size-3.5 shrink-0 text-green-500" />
-                              ) : isInProgress ? (
-                                <PlayCircle className="size-3.5 shrink-0 text-blue-500" />
-                              ) : (
-                                <Circle className="size-3.5 shrink-0" />
-                              )
+                            {isCompleted ? (
+                              <CheckCircle2 className="size-3.5 shrink-0 text-green-500" />
+                            ) : isInProgress ? (
+                              <PlayCircle className="size-3.5 shrink-0 text-blue-500" />
                             ) : (
                               <Circle className="size-3.5 shrink-0" />
                             )}
