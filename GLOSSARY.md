@@ -15,8 +15,12 @@ A person who builds and owns courses, and sees the Students enrolled on them.
 _Avoid_: Teacher, Author, Creator
 
 **Platform Admin**:
-A member of Cadence staff who runs the platform. Only a Platform Admin decides Refund Requests.
+A member of Cadence staff who runs the platform. Only a Platform Admin decides Refund Requests. A Platform Admin can Manage any course as if they were its Instructor.
 _Avoid_: Admin (on its own), the team, Staff
+
+**Manage (a course)**:
+To edit a course, answer and moderate its Discussions, and see its Students. Only the course's Instructor and Platform Admins can.
+_Avoid_: Staff, Moderate, Own
 
 **Team Admin**:
 A Student who buys and manages a Team Licence. A Team Admin has no say over Refund Requests.
@@ -25,8 +29,16 @@ _Avoid_: Admin (on its own)
 ### Enrollment
 
 **Enrollment**:
-A Student's place on a course, which lets them take it. A Student has at most one Enrollment per course, whether it came from an Individual Purchase or a Claimed Seat.
+A Student's place on a course, which lets them take it unless they are Region-Locked on it. A Student has at most one Enrollment per course, whether it came from an Individual Purchase or a Claimed Seat.
 _Avoid_: Place on a course, Access
+
+**Course Access**:
+Whether a person may take a course right now. The course's Instructor and Platform Admins always have it; a Student has it through an Enrollment, unless they are Region-Locked on the course.
+_Avoid_: Entitlement, Permission
+
+**Region-Locked**:
+A Student whose Enrollment on a course comes only through an Individual Purchase made at a Purchasing-Power Price, and who is now in a different country than the one it was bought in. A Claimed Seat never makes a Student Region-Locked.
+_Avoid_: PPP-blocked, Geo-blocked
 
 **Lapsed**:
 A Student who has lost their Enrollment on a course but still has progress on it.
@@ -50,6 +62,10 @@ _Avoid_: Reply (on its own), Answer
 **Purchase**:
 A single payment for a course. It is either an Individual Purchase or a Team Licence.
 _Avoid_: Order, Transaction
+
+**Purchasing-Power Price**:
+A lower price for buyers in a country with less purchasing power, set by that country's tier.
+_Avoid_: PPP, Regional discount, Geo price
 
 **Individual Purchase**:
 A Purchase a Student makes for themselves. It gives the buyer an Enrollment.
