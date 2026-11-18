@@ -5,7 +5,6 @@ import type { Route } from "./+types/courses.$slug.lessons.$lessonId";
 import {
   getCourseAccess,
   requireContentAccess,
-  requireUserId,
 } from "~/modules/course-access/request.server";
 import type { CourseAccessDecision } from "~/modules/course-access/index.server";
 import { renderComment } from "~/lib/comment-markdown.server";
@@ -117,7 +116,7 @@ type CommentAuthor = {
   name: string;
   avatarUrl: string | null;
   isInstructor: boolean;
-  isAdmin: boolean;
+  isPlatformAdmin: boolean;
 };
 
 type ThreadComment = {
@@ -208,6 +207,17 @@ function requireLessonInCourse(lessonId: number, courseId: number) {
   const mod = lesson ? getModuleById(lesson.moduleId) : undefined;
   if (!mod || mod.courseId !== courseId) {
     throw data("Lesson not found in this course", { status: 404 });
+  }
+}
+
+function requireQuizOnLesson(quizId: number, lessonId: number) {
+  const quiz = db
+    .select({ lessonId: quizzes.lessonId })
+    .from(quizzes)
+    .where(eq(quizzes.id, quizId))
+    .get();
+  if (!quiz || quiz.lessonId !== lessonId) {
+    throw data("Quiz not found on this lesson", { status: 404 });
   }
 }
 
@@ -405,7 +415,7 @@ function getLessonThread(lessonId: number): ThreadComment[] {
         name: row.authorName,
         avatarUrl: row.authorAvatarUrl,
         isInstructor: row.authorId === course.instructorId,
-        isAdmin: row.authorRole === UserRole.Admin,
+        isPlatformAdmin: row.authorRole === UserRole.Admin,
       },
       replies: [],
     };
@@ -865,20 +875,21 @@ export async function action({ params, request }: Route.ActionArgs) {
     throw data("Course not found", { status: 404 });
   }
 
-  const currentUserId = await requireUserId(request);
+  // Every intent needs Course Access; check it here rather than relying on the
+  // loader — loader guards don't protect actions. The viewer is read once.
+  const { userId: currentUserId, canManage } = await requireContentAccess(
+    request,
+    course.id
+  );
 
   const formData = await request.formData();
   const intent = formData.get("intent");
 
-  // Comment intents re-check access here rather than relying on the loader —
-  // loader guards don't protect actions.
   if (
     intent === "create-comment" ||
     intent === "edit-comment" ||
     intent === "delete-comment"
   ) {
-    const { canManage } = await requireContentAccess(request, course.id);
-
     try {
       if (intent === "create-comment") {
         const parsed = parseFormData(formData, createCommentSchema);
@@ -948,10 +959,7 @@ export async function action({ params, request }: Route.ActionArgs) {
     }
   }
 
-  // Bookmark and Note intents re-check access here, like the comment intents
-  // above — loader guards don't protect actions.
   if (intent === "toggle-bookmark" || intent === "save-note") {
-    await requireContentAccess(request, course.id);
     requireLessonInCourse(lessonId, course.id);
 
     if (intent === "toggle-bookmark") {
@@ -980,6 +988,7 @@ export async function action({ params, request }: Route.ActionArgs) {
   }
 
   if (intent === "mark-complete") {
+    requireLessonInCourse(lessonId, course.id);
     markLessonComplete(currentUserId, lessonId);
     return { success: true };
   }
@@ -989,6 +998,8 @@ export async function action({ params, request }: Route.ActionArgs) {
     if (isNaN(quizId)) {
       throw data("Invalid quiz ID", { status: 400 });
     }
+    requireLessonInCourse(lessonId, course.id);
+    requireQuizOnLesson(quizId, lessonId);
 
     // Collect answers: form fields named "question-{questionId}" with value = optionId
     const selectedAnswers: Record<number, number> = {};

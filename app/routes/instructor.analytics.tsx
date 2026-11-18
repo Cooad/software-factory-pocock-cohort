@@ -66,7 +66,7 @@ export function meta() {
 export async function loader({ request, url }: Route.LoaderArgs) {
   const person = await requireInstructorOrPlatformAdmin(request);
   return instructorAnalytics.get(
-    { userId: person.userId, isAdmin: person.isPlatformAdmin },
+    { userId: person.userId, isPlatformAdmin: person.isPlatformAdmin },
     url.searchParams,
     new Date()
   );
@@ -625,7 +625,7 @@ export default function InstructorAnalytics({
   const {
     tab,
     range,
-    isAdmin,
+    isPlatformAdmin,
     instructorId,
     selectedCourseId,
     summary,
@@ -673,14 +673,14 @@ export default function InstructorAnalytics({
         <div>
           <h1 className="text-3xl font-bold">Analytics</h1>
           <p className="mt-1 text-muted-foreground">
-            {isAdmin && instructorId === null
+            {isPlatformAdmin && instructorId === null
               ? "Revenue across every instructor on the platform."
               : "Revenue and earnings for your courses."}
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          {isAdmin && (
+          {isPlatformAdmin && (
             <Select
               value={instructorId === null ? "all" : String(instructorId)}
               onValueChange={(value) =>
