@@ -24,7 +24,6 @@ export type NotificationPreferences = {
   [C in NotificationCategory]?: { [Ch in NotificationChannel]?: boolean };
 };
 
-/** Defaults filled in. */
 export type FeedPreferences = Record<NotificationCategory, boolean>;
 
 export const DEFAULT_FEED_PREFERENCES: FeedPreferences = {

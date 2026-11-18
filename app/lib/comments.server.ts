@@ -126,10 +126,6 @@ async function notifyQuestionAuthor(
   );
 }
 
-/**
- * A top-level comment by anyone but the course's Instructor is a Discussion
- * Question (GLOSSARY.md).
- */
 async function notifyInstructor(
   db: Db,
   question: Comment,

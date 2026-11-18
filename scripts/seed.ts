@@ -205,7 +205,6 @@ async function seed() {
     ])
     .returning()
     .all();
-  const [emma, james, olivia, liam, sophia] = students;
 
   const [bossy] = db
     .insert(schema.users)
@@ -253,6 +252,12 @@ async function seed() {
     if (!student) throw new Error(`No seeded student with email ${email}`);
     return student;
   }
+
+  const emma = studentByEmail("emma.wilson@student.dev");
+  const james = studentByEmail("james.park@student.dev");
+  const olivia = studentByEmail("olivia.martinez@student.dev");
+  const liam = studentByEmail("liam@example.com");
+  const sophia = studentByEmail("sophia.davis@student.dev");
 
   const instructorCount = 3;
   const studentCount = allStudents.length;
@@ -2388,7 +2393,6 @@ This course is still in draft while the cluster examples are rewritten against t
   let generatedEnrollments = 0;
   let generatedProgressRows = 0;
 
-  // A student buys, enrols, and works through the course as far as they get.
   // Returns false if there was nothing they could have bought on that day — a
   // course cannot be sold before it was created, and nobody buys twice.
   function buyCourse(

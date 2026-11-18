@@ -47,6 +47,7 @@ export function checkPppAccess(
 
   if (!purchaseCountry) return result;
 
+  // A full-price purchase has no discount to protect, so it may be used anywhere.
   const purchaseTier = getTierForCountry(purchaseCountry);
   if (purchaseTier === 1) return result;
 

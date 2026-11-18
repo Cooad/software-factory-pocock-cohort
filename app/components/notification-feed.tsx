@@ -79,8 +79,8 @@ export function NotificationFeedProvider({
 
 const feedTokenSchema = z.object({ userId: z.string(), userToken: z.string() });
 
-// Null when the session now holds someone else (or no one), so the old feed
-// lapses instead of picking up another person's token.
+// The userId check makes the old feed lapse once the session holds someone
+// else (or no one), instead of picking up another person's token.
 async function fetchFeedToken(userId: string): Promise<string | null> {
   const response = await fetch("/api/notification-feed-token");
   if (!response.ok) return null;

@@ -9,7 +9,7 @@ import { type Highlighter, createHighlighter } from "shiki";
 // including the instructor and any admin who opens the questions queue.
 //
 // Output is injected with dangerouslySetInnerHTML, so any change here needs
-// the same scrutiny.
+// security review.
 
 const SAFE_LINK_PROTOCOLS = ["http:", "https:", "mailto:"];
 
