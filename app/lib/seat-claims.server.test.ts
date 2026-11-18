@@ -1,5 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { createTestDb, seedBaseData } from "~/test/setup";
+import {
+  createTestDb,
+  createUserWithRole,
+  seedBaseData,
+} from "~/test/setup";
 import * as schema from "~/db/schema";
 import { enrollStudent, isEnrolled } from "./enrollments.server";
 import { approveRefundRequest, raiseRefundRequest } from "./refunds.server";
@@ -106,7 +110,12 @@ describe("claiming a Seat", () => {
 
   it("refuses a Seat whose Team Licence was refunded", async () => {
     const { purchase, seats } = buySeats(2);
-    const platformAdmin = createStudent(db, "Pat", "pat@example.com");
+    const platformAdmin = createUserWithRole(
+      db,
+      "Pat",
+      "pat@example.com",
+      schema.UserRole.Admin
+    );
     await approveRefundRequest(db, await raise(purchase.id), platformAdmin.id, null, NOW, fakeNotifications());
 
     expect(
@@ -246,7 +255,8 @@ describe("the Seat claim Notification", () => {
     await approveRefundRequest(
       db,
       await raise(purchase.id),
-      createStudent(db, "Pat", "pat@example.com").id,
+      createUserWithRole(db, "Pat", "pat@example.com", schema.UserRole.Admin)
+        .id,
       null,
       NOW,
       fakeNotifications()
