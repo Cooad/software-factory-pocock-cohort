@@ -1,7 +1,7 @@
 import { Link } from "react-router";
 import type { Route } from "./+types/saved";
 import { db } from "~/db";
-import { requireUserId } from "~/lib/access.server";
+import { requireUserId } from "~/modules/course-access/request.server";
 import { listBookmarks } from "~/lib/bookmarks.server";
 import { listNotes } from "~/lib/notes.server";
 import { Card, CardContent } from "~/components/ui/card";

@@ -1,7 +1,7 @@
 import { Link, isRouteErrorResponse, useSearchParams } from "react-router";
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts";
 import type { Route } from "./+types/instructor.analytics";
-import { requireInstructorOrAdmin } from "~/lib/access.server";
+import { requireInstructorOrPlatformAdmin } from "~/modules/course-access/request.server";
 import {
   ANALYTICS_RANGES,
   PLATFORM_FEE_PERCENT,
@@ -64,8 +64,12 @@ export function meta() {
 }
 
 export async function loader({ request, url }: Route.LoaderArgs) {
-  const viewer = await requireInstructorOrAdmin(request);
-  return instructorAnalytics.get(viewer, url.searchParams, new Date());
+  const person = await requireInstructorOrPlatformAdmin(request);
+  return instructorAnalytics.get(
+    { userId: person.userId, isAdmin: person.isPlatformAdmin },
+    url.searchParams,
+    new Date()
+  );
 }
 
 function MoneyCard({
