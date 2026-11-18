@@ -1,2 +1,3 @@
 *.sh text eol=lf
 .husky/* text eol=lf
+drizzle/meta/*_snapshot.json -diff linguist-generated=true
