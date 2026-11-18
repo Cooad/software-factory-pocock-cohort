@@ -78,6 +78,22 @@ describe("saving a Note", () => {
     ).toThrow();
   });
 
+  it("clears the Note when saved empty or blank", () => {
+    saveNote(db, base.user.id, lessonIds[0], "Something", at(0));
+
+    expect(saveNote(db, base.user.id, lessonIds[0], "   \n ", at(3))).toEqual({
+      ok: true,
+      note: null,
+    });
+    expect(getNote(db, base.user.id, lessonIds[0])).toBeUndefined();
+    expect(listNotes(db, base.user.id)).toHaveLength(0);
+  });
+
+  it("saves nothing when a Lesson with no Note is saved empty", () => {
+    expect(saveNote(db, base.user.id, lessonIds[0], "", at(0)).ok).toBe(true);
+    expect(getNote(db, base.user.id, lessonIds[0])).toBeUndefined();
+  });
+
   it("accepts a Note of exactly the cap", () => {
     const body = "a".repeat(MAX_NOTE_LENGTH);
 

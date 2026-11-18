@@ -6,8 +6,8 @@ import { noteBodySchema } from "~/lib/notes";
 
 // ─── Notes ───
 // A Student's own writing about a Lesson, private to the Student who wrote it.
-// See GLOSSARY.md. Nothing outside the owning Student's Lesson page and Saved
-// page may read a Note body — no Instructor or Platform Admin view.
+// See GLOSSARY.md. Nothing outside the owning Student's Lesson page and
+// Bookmarks & Notes page may read a Note body — no Instructor or Platform Admin view.
 //
 // Every function takes the database first, so tests can hand in an in-memory
 // one. Content access is checked by the caller (the Lesson page action).
@@ -24,13 +24,14 @@ export function getNote(db: Db, studentId: number, lessonId: number) {
 }
 
 export type SaveNoteResult =
-  | { ok: true; note: { body: string; updatedAt: string } }
+  | { ok: true; note: { body: string; updatedAt: string } | null }
   | { ok: false; error: string };
 
 /**
  * Creates the Student's Note on a Lesson, or replaces its body and moves
  * "last edited" on if one exists. `createdAt` is kept on a re-save. The body
- * is trimmed; one over the cap is refused, never truncated.
+ * is trimmed; one over the cap is refused, never truncated. Saving an empty
+ * body clears the Note, so the Lesson is back to having none.
  */
 export function saveNote(
   db: Db,
@@ -42,6 +43,13 @@ export function saveNote(
   const parsed = noteBodySchema.safeParse(body);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0].message };
+  }
+
+  if (parsed.data.length === 0) {
+    db.delete(notes)
+      .where(and(eq(notes.userId, studentId), eq(notes.lessonId, lessonId)))
+      .run();
+    return { ok: true, note: null };
   }
 
   const timestamp = now.toISOString();

@@ -2071,7 +2071,7 @@ This course is still in draft while the cluster examples are rewritten against t
   console.log(`Created ${countRows(schema.lessonProgress)} lesson progress records.`);
 
   // ─── Bookmarks and Notes ───
-  // Private to each Student. Emma has a few of each so the Saved page has
+  // Private to each Student. Emma has a few of each so the Bookmarks & Notes page has
   // something to show; Olivia has one of each to prove rows stay per-Student.
 
   function bookmark(userId: number, lessonId: number, daysAgoCreated: number) {
