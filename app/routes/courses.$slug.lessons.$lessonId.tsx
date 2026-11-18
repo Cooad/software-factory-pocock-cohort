@@ -13,6 +13,11 @@ import {
 import { defaultNotifications } from "~/lib/notifications.server";
 import { isBookmarked, toggleBookmark } from "~/lib/bookmarks.server";
 import { getNote, saveNote } from "~/lib/notes.server";
+import {
+  getLessonProgress,
+  markLessonComplete,
+  markLessonInProgress,
+} from "~/lib/lesson-progress.server";
 import { MAX_NOTE_LENGTH, noteBodySchema } from "~/lib/notes";
 import {
   CommentThread,
@@ -190,19 +195,6 @@ function getUserById(id: number) {
   return db.select().from(users).where(eq(users.id, id)).get();
 }
 
-function getLessonProgress(userId: number, lessonId: number) {
-  return db
-    .select()
-    .from(lessonProgress)
-    .where(
-      and(
-        eq(lessonProgress.userId, userId),
-        eq(lessonProgress.lessonId, lessonId)
-      )
-    )
-    .get();
-}
-
 function getLessonProgressForCourse(userId: number, courseId: number) {
   const courseModules = db
     .select({ id: modules.id })
@@ -230,59 +222,6 @@ function getLessonProgressForCourse(userId: number, courseId: number) {
       )
     )
     .all();
-}
-
-function markLessonComplete(userId: number, lessonId: number) {
-  const existing = getLessonProgress(userId, lessonId);
-
-  if (existing) {
-    return db
-      .update(lessonProgress)
-      .set({
-        status: LessonProgressStatus.Completed,
-        completedAt: new Date().toISOString(),
-      })
-      .where(eq(lessonProgress.id, existing.id))
-      .returning()
-      .get();
-  }
-
-  return db
-    .insert(lessonProgress)
-    .values({
-      userId,
-      lessonId,
-      status: LessonProgressStatus.Completed,
-      completedAt: new Date().toISOString(),
-    })
-    .returning()
-    .get();
-}
-
-function markLessonInProgress(userId: number, lessonId: number) {
-  const existing = getLessonProgress(userId, lessonId);
-
-  if (existing) {
-    if (existing.status === LessonProgressStatus.Completed) {
-      return existing;
-    }
-    return db
-      .update(lessonProgress)
-      .set({ status: LessonProgressStatus.InProgress })
-      .where(eq(lessonProgress.id, existing.id))
-      .returning()
-      .get();
-  }
-
-  return db
-    .insert(lessonProgress)
-    .values({
-      userId,
-      lessonId,
-      status: LessonProgressStatus.InProgress,
-    })
-    .returning()
-    .get();
 }
 
 function getLastWatchPosition(userId: number, lessonId: number) {
@@ -661,8 +600,8 @@ export async function loader({ params, request }: Route.LoaderArgs) {
   if (currentUserId) {
     if (enrolled) {
       // Mark lesson as in-progress when viewed
-      markLessonInProgress(currentUserId, lessonId);
-      const progress = getLessonProgress(currentUserId, lessonId);
+      markLessonInProgress(db, currentUserId, lessonId);
+      const progress = getLessonProgress(db, currentUserId, lessonId);
       lessonStatus = progress?.status ?? null;
 
       // Get progress for all lessons in course (for curriculum sidebar)
@@ -923,7 +862,7 @@ export async function action({ params, request }: Route.ActionArgs) {
   }
 
   if (intent === "mark-complete") {
-    markLessonComplete(currentUserId, lessonId);
+    markLessonComplete(db, currentUserId, lessonId, new Date());
     return { success: true };
   }
 

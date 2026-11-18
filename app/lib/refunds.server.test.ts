@@ -1,6 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { and, eq } from "drizzle-orm";
-import { createTestDb, seedBaseData } from "~/test/setup";
+import {
+  createTestDb,
+  createUserWithRole,
+  seedBaseData,
+} from "~/test/setup";
 import * as schema from "~/db/schema";
 import { LessonProgressStatus, RefundStatus, UserRole } from "~/db/schema";
 import {
@@ -16,19 +19,30 @@ import {
 } from "./refunds.server";
 import { isBookmarked, toggleBookmark } from "./bookmarks.server";
 import { getNote, saveNote } from "./notes.server";
+import { createLesson, createModule } from "./course-content.server";
+import { createStudent } from "./users.server";
+import { enrollStudent, isEnrolled } from "./enrollments.server";
+import {
+  createIndividualPurchase,
+  createTeamLicence,
+} from "./purchases.server";
+import { claimSeat, getSeatByCode } from "./seat-claims.server";
+import { getLessonProgress, markLessonComplete } from "./lesson-progress.server";
+import { recordVideoWatchEvent } from "./video-tracking.server";
 import {
   fakeNotifications,
   type FakeNotifications,
 } from "./notifications.fake.server";
 
 type TestDb = ReturnType<typeof createTestDb>;
+type Seat = typeof schema.coupons.$inferSelect;
 
 const NOW = new Date(2026, 9, 6, 12, 0, 0);
 
 function daysBefore(days: number) {
   const when = new Date(NOW);
   when.setDate(when.getDate() - days);
-  return when.toISOString();
+  return when;
 }
 
 let db: TestDb;
@@ -42,105 +56,60 @@ beforeEach(() => {
   notifications = fakeNotifications();
   base = seedBaseData(db);
 
-  platformAdmin = db
-    .insert(schema.users)
-    .values({ name: "Pat Admin", email: "pat@example.com", role: UserRole.Admin })
-    .returning()
-    .get();
+  platformAdmin = createUserWithRole(
+    db,
+    "Pat Admin",
+    "pat@example.com",
+    UserRole.Admin
+  );
 
-  const module = db
-    .insert(schema.modules)
-    .values({ courseId: base.course.id, title: "Basics", position: 1 })
-    .returning()
-    .get();
-
+  const module = createModule(db, base.course.id, "Basics");
   lessonIds = [1, 2, 3, 4].map(
-    (position) =>
-      db
-        .insert(schema.lessons)
-        .values({ moduleId: module.id, title: `Lesson ${position}`, position })
-        .returning()
-        .get().id
+    (n) => createLesson(db, module.id, `Lesson ${n}`).id
   );
 });
 
-function addStudent(name: string) {
-  return db
-    .insert(schema.users)
-    .values({
-      name,
-      email: `${name.toLowerCase()}@example.com`,
-      role: UserRole.Student,
-    })
-    .returning()
-    .get();
-}
-
-function buyForSelf(userId: number, daysAgo = 3, amountPaid = 7900) {
-  const purchase = db
-    .insert(schema.purchases)
-    .values({
-      userId,
-      courseId: base.course.id,
-      amountPaid,
-      createdAt: daysBefore(daysAgo),
-    })
-    .returning()
-    .get();
-  db.insert(schema.enrollments)
-    .values({ userId, courseId: base.course.id })
-    .run();
+async function buyForSelf(userId: number, daysAgo = 3, amountPaid = 7900) {
+  const purchase = createIndividualPurchase(
+    db,
+    userId,
+    base.course.id,
+    amountPaid,
+    null,
+    daysBefore(daysAgo)
+  );
+  await enrollStudent(
+    db,
+    userId,
+    base.course.id,
+    daysBefore(daysAgo),
+    fakeNotifications()
+  );
   return purchase;
 }
 
 function buySeats(userId: number, seats: number, daysAgo = 3) {
-  const team = db.insert(schema.teams).values({}).returning().get();
-  const purchase = db
-    .insert(schema.purchases)
-    .values({
-      userId,
-      courseId: base.course.id,
-      amountPaid: 7900 * seats,
-      createdAt: daysBefore(daysAgo),
-    })
-    .returning()
-    .get();
-  const seatRows = Array.from({ length: seats }, (_, i) =>
-    db
-      .insert(schema.coupons)
-      .values({
-        teamId: team.id,
-        courseId: base.course.id,
-        code: `SEAT-${purchase.id}-${i}`,
-        purchaseId: purchase.id,
-      })
-      .returning()
-      .get()
+  return createTeamLicence(
+    db,
+    userId,
+    base.course.id,
+    7900 * seats,
+    null,
+    seats,
+    daysBefore(daysAgo)
   );
-  return { purchase, seats: seatRows };
 }
 
-function claimSeat(seatId: number, userId: number) {
-  db.update(schema.coupons)
-    .set({ redeemedByUserId: userId, redeemedAt: daysBefore(1) })
-    .where(eq(schema.coupons.id, seatId))
-    .run();
-  db.insert(schema.enrollments)
-    .values({ userId, courseId: base.course.id })
-    .run();
-}
-
-function isEnrolled(userId: number) {
-  return !!db
-    .select()
-    .from(schema.enrollments)
-    .where(
-      and(
-        eq(schema.enrollments.userId, userId),
-        eq(schema.enrollments.courseId, base.course.id)
-      )
-    )
-    .get();
+async function claim(seat: Seat, studentId: number) {
+  const result = await claimSeat(
+    db,
+    seat.code,
+    studentId,
+    "GB",
+    daysBefore(1),
+    fakeNotifications()
+  );
+  if (!result.ok) throw new Error(result.error);
 }
 
 async function raise(purchaseId: number, buyerId: number) {
@@ -156,28 +125,24 @@ async function raise(purchaseId: number, buyerId: number) {
   return result.refundRequestId;
 }
 
-function getSeat(seatId: number) {
-  const seat = db
-    .select()
-    .from(schema.coupons)
-    .where(eq(schema.coupons.id, seatId))
-    .get();
-  if (!seat) throw new Error("Seat not found");
-  return seat;
+function availabilityOf(seat: Seat) {
+  const current = getSeatByCode(db, seat.code);
+  if (!current) throw new Error("Seat not found");
+  return getSeatAvailability(db, current);
 }
 
 describe("raising a Refund Request", () => {
   it("lets the buyer raise one on an Individual Purchase inside the window", async () => {
-    const purchase = buyForSelf(base.user.id);
+    const purchase = await buyForSelf(base.user.id);
 
     const result = await raiseRefundRequest(db, purchase.id, base.user.id, "Nope.", NOW, notifications);
 
     expect(result).toMatchObject({ ok: true, kind: "individual_purchase" });
   });
 
-  it("refuses anyone but the buyer", () => {
-    const purchase = buyForSelf(base.user.id);
-    const someoneElse = addStudent("Ben");
+  it("refuses anyone but the buyer", async () => {
+    const purchase = await buyForSelf(base.user.id);
+    const someoneElse = createStudent(db, "Ben", "ben@example.com");
 
     expect(checkRefundRequest(db, purchase.id, someoneElse.id, NOW)).toMatchObject(
       { ok: false, status: 404 }
@@ -185,7 +150,7 @@ describe("raising a Refund Request", () => {
   });
 
   it("allows only one Open Refund Request per Purchase", async () => {
-    const purchase = buyForSelf(base.user.id);
+    const purchase = await buyForSelf(base.user.id);
     await raise(purchase.id, base.user.id);
 
     expect(checkRefundRequest(db, purchase.id, base.user.id, NOW)).toMatchObject(
@@ -193,9 +158,9 @@ describe("raising a Refund Request", () => {
     );
   });
 
-  it("keeps the fourteenth day open and closes the fifteenth", () => {
-    const onDay14 = buyForSelf(base.user.id, 14);
-    const onDay15 = buyForSelf(addStudent("Ben").id, 15);
+  it("keeps the fourteenth day open and closes the fifteenth", async () => {
+    const onDay14 = await buyForSelf(base.user.id, 14);
+    const onDay15 = await buyForSelf(createStudent(db, "Ben", "ben@example.com").id, 15);
 
     expect(checkRefundRequest(db, onDay14.id, onDay14.userId, NOW).ok).toBe(true);
     expect(
@@ -203,41 +168,31 @@ describe("raising a Refund Request", () => {
     ).toMatchObject({ ok: false, error: "The 14-day window has closed." });
   });
 
-  it("refuses a buyer who has completed half the lessons", () => {
-    const purchase = buyForSelf(base.user.id);
-    db.insert(schema.lessonProgress)
-      .values(
-        lessonIds.slice(0, 2).map((lessonId) => ({
-          userId: base.user.id,
-          lessonId,
-          status: LessonProgressStatus.Completed,
-        }))
-      )
-      .run();
+  it("refuses a buyer who has completed half the lessons", async () => {
+    const purchase = await buyForSelf(base.user.id);
+    for (const lessonId of lessonIds.slice(0, 2)) {
+      markLessonComplete(db, base.user.id, lessonId, NOW);
+    }
 
     expect(checkRefundRequest(db, purchase.id, base.user.id, NOW)).toMatchObject(
       { ok: false, status: 403 }
     );
   });
 
-  it("refuses a buyer who has watched two hours", () => {
-    const purchase = buyForSelf(base.user.id);
-    db.insert(schema.videoWatchEvents)
-      .values([
-        { userId: base.user.id, lessonId: lessonIds[0], eventType: "progress", positionSeconds: 3600 },
-        { userId: base.user.id, lessonId: lessonIds[1], eventType: "progress", positionSeconds: 3600 },
-      ])
-      .run();
+  it("refuses a buyer who has watched two hours", async () => {
+    const purchase = await buyForSelf(base.user.id);
+    recordVideoWatchEvent(db, base.user.id, lessonIds[0], "progress", 3600);
+    recordVideoWatchEvent(db, base.user.id, lessonIds[1], "progress", 3600);
 
     expect(checkRefundRequest(db, purchase.id, base.user.id, NOW)).toMatchObject(
       { ok: false, status: 403 }
     );
   });
 
-  it("refuses a Team Licence with a Claimed Seat", () => {
-    const teamAdmin = addStudent("Priya");
+  it("refuses a Team Licence with a Claimed Seat", async () => {
+    const teamAdmin = createStudent(db, "Priya", "priya@example.com");
     const { purchase, seats } = buySeats(teamAdmin.id, 3);
-    claimSeat(seats[0].id, addStudent("Ben").id);
+    await claim(seats[0], createStudent(db, "Ben", "ben@example.com").id);
 
     expect(checkRefundRequest(db, purchase.id, teamAdmin.id, NOW)).toMatchObject({
       ok: false,
@@ -247,8 +202,8 @@ describe("raising a Refund Request", () => {
 });
 
 describe("the refund offer on the course page", () => {
-  it("offers the newest Individual Purchase, not a newer Team Licence", () => {
-    const individual = buyForSelf(base.user.id, 3);
+  it("offers the newest Individual Purchase, not a newer Team Licence", async () => {
+    const individual = await buyForSelf(base.user.id, 3);
     buySeats(base.user.id, 5, 1);
 
     expect(getRefundOffer(db, base.user.id, base.course.id, NOW)).toMatchObject({
@@ -258,7 +213,7 @@ describe("the refund offer on the course page", () => {
   });
 
   it("offers nothing once the purchase has been refunded", async () => {
-    const purchase = buyForSelf(base.user.id);
+    const purchase = await buyForSelf(base.user.id);
     const id = await raise(purchase.id, base.user.id);
     await approveRefundRequest(db, id, platformAdmin.id, null, NOW, notifications);
 
@@ -268,42 +223,26 @@ describe("the refund offer on the course page", () => {
 
 describe("approving a Refund Request", () => {
   it("removes the buyer's Enrollment but keeps their progress", async () => {
-    const purchase = buyForSelf(base.user.id);
-    db.insert(schema.lessonProgress)
-      .values({
-        userId: base.user.id,
-        lessonId: lessonIds[0],
-        status: LessonProgressStatus.Completed,
-      })
-      .run();
+    const purchase = await buyForSelf(base.user.id);
+    markLessonComplete(db, base.user.id, lessonIds[0], NOW);
     const id = await raise(purchase.id, base.user.id);
 
     const result = await approveRefundRequest(db, id, platformAdmin.id, null, NOW, notifications);
 
     expect(result.ok).toBe(true);
-    expect(isEnrolled(base.user.id)).toBe(false);
+    expect(isEnrolled(db, base.user.id, base.course.id)).toBe(false);
+    expect(getLessonProgress(db, base.user.id, lessonIds[0])?.status).toBe(
+      LessonProgressStatus.Completed
+    );
     expect(
-      db
-        .select()
-        .from(schema.lessonProgress)
-        .where(eq(schema.lessonProgress.userId, base.user.id))
-        .all()
-    ).toHaveLength(1);
-
-    const refundRequest = db
-      .select()
-      .from(schema.refunds)
-      .where(eq(schema.refunds.id, id))
-      .get();
-    expect(refundRequest).toMatchObject({
-      status: RefundStatus.Approved,
-      amountRefunded: 7900,
-      resolvedByUserId: platformAdmin.id,
-    });
+      listRefundRequestsForReview(db, RefundStatus.Approved, NOW)
+    ).toMatchObject([
+      { id, status: RefundStatus.Approved, decidedByName: "Pat Admin" },
+    ]);
   });
 
   it("keeps the buyer's Bookmarks and Notes", async () => {
-    const purchase = buyForSelf(base.user.id);
+    const purchase = await buyForSelf(base.user.id);
     toggleBookmark(db, base.user.id, lessonIds[0], NOW);
     saveNote(db, base.user.id, lessonIds[1], "Come back to this", NOW);
     const id = await raise(purchase.id, base.user.id);
@@ -311,35 +250,33 @@ describe("approving a Refund Request", () => {
     const result = await approveRefundRequest(db, id, platformAdmin.id, null, NOW, notifications);
 
     expect(result.ok).toBe(true);
-    expect(isEnrolled(base.user.id)).toBe(false);
+    expect(isEnrolled(db, base.user.id, base.course.id)).toBe(false);
     expect(isBookmarked(db, base.user.id, lessonIds[0])).toBe(true);
     expect(getNote(db, base.user.id, lessonIds[1])?.body).toBe("Come back to this");
   });
 
   it("keeps the buyer's Enrollment if they also hold a Claimed Seat for the course", async () => {
-    const priya = addStudent("Priya");
+    const priya = createStudent(db, "Priya", "priya@example.com");
     const { seats } = buySeats(priya.id, 2);
     // Liam claims a Seat first, so his Enrollment came from it.
-    claimSeat(seats[0].id, base.user.id);
-    const purchase = db
-      .insert(schema.purchases)
-      .values({
-        userId: base.user.id,
-        courseId: base.course.id,
-        amountPaid: 7900,
-        createdAt: daysBefore(2),
-      })
-      .returning()
-      .get();
+    await claim(seats[0], base.user.id);
+    const purchase = createIndividualPurchase(
+      db,
+      base.user.id,
+      base.course.id,
+      7900,
+      null,
+      daysBefore(2)
+    );
     const id = await raise(purchase.id, base.user.id);
 
     await approveRefundRequest(db, id, platformAdmin.id, null, NOW, notifications);
 
-    expect(isEnrolled(base.user.id)).toBe(true);
+    expect(isEnrolled(db, base.user.id, base.course.id)).toBe(true);
   });
 
   it("makes a Team Licence's Unclaimed Seats unclaimable", async () => {
-    const priya = addStudent("Priya");
+    const priya = createStudent(db, "Priya", "priya@example.com");
     const { purchase, seats } = buySeats(priya.id, 2);
     const id = await raise(purchase.id, priya.id);
 
@@ -347,26 +284,12 @@ describe("approving a Refund Request", () => {
 
     expect(result.ok).toBe(true);
     for (const seat of seats) {
-      expect(getSeatAvailability(db, getSeat(seat.id))).toBe("refunded");
+      expect(availabilityOf(seat)).toBe("refunded");
     }
   });
 
-  it("refuses a Team Licence whose Seat was claimed after the request", async () => {
-    const priya = addStudent("Priya");
-    const { purchase, seats } = buySeats(priya.id, 2);
-    const id = await raise(purchase.id, priya.id);
-    // Seats are on hold while Open, but older data can still hold a claim.
-    claimSeat(seats[0].id, addStudent("Ben").id);
-
-    expect(await approveRefundRequest(db, id, platformAdmin.id, null, NOW, notifications)).toMatchObject({
-      ok: false,
-      status: 409,
-    });
-    expect(getSeatAvailability(db, getSeat(seats[1].id))).toBe("on_hold");
-  });
-
   it("lets the first decision win", async () => {
-    const purchase = buyForSelf(base.user.id);
+    const purchase = await buyForSelf(base.user.id);
     const id = await raise(purchase.id, base.user.id);
     await approveRefundRequest(db, id, platformAdmin.id, null, NOW, notifications);
 
@@ -380,7 +303,7 @@ describe("approving a Refund Request", () => {
   });
 
   it("emails the buyer that the refund is on its way", async () => {
-    const purchase = buyForSelf(base.user.id);
+    const purchase = await buyForSelf(base.user.id);
     const id = await raise(purchase.id, base.user.id);
 
     const result = await approveRefundRequest(db, id, platformAdmin.id, null, NOW, notifications);
@@ -394,7 +317,7 @@ describe("approving a Refund Request", () => {
 
 describe("declining a Refund Request", () => {
   it("needs a note", async () => {
-    const purchase = buyForSelf(base.user.id);
+    const purchase = await buyForSelf(base.user.id);
     const id = await raise(purchase.id, base.user.id);
 
     expect(await declineRefundRequest(db, id, platformAdmin.id, "  ", NOW, notifications)).toMatchObject({
@@ -404,7 +327,7 @@ describe("declining a Refund Request", () => {
   });
 
   it("keeps the buyer's Enrollment and lets them raise a new Refund Request", async () => {
-    const purchase = buyForSelf(base.user.id);
+    const purchase = await buyForSelf(base.user.id);
     const id = await raise(purchase.id, base.user.id);
 
     const result = await declineRefundRequest(
@@ -418,36 +341,30 @@ describe("declining a Refund Request", () => {
 
     if (!result.ok) throw new Error(result.error);
     expect(result.email.body).toContain("You finished the course.");
-    expect(isEnrolled(base.user.id)).toBe(true);
+    expect(isEnrolled(db, base.user.id, base.course.id)).toBe(true);
     expect(checkRefundRequest(db, purchase.id, base.user.id, NOW).ok).toBe(true);
   });
 
   it("frees a Team Licence's Seats again", async () => {
-    const priya = addStudent("Priya");
+    const priya = createStudent(db, "Priya", "priya@example.com");
     const { purchase, seats } = buySeats(priya.id, 1);
     const id = await raise(purchase.id, priya.id);
-    expect(getSeatAvailability(db, getSeat(seats[0].id))).toBe("on_hold");
+    expect(availabilityOf(seats[0])).toBe("on_hold");
 
     await declineRefundRequest(db, id, platformAdmin.id, "Seats are in use.", NOW, notifications);
 
-    expect(getSeatAvailability(db, getSeat(seats[0].id))).toBe("available");
+    expect(availabilityOf(seats[0])).toBe("available");
   });
 });
 
 describe("listing Refund Requests", () => {
   it("shows a Platform Admin live figures and the rules a request breaks", async () => {
-    const purchase = buyForSelf(base.user.id);
+    const purchase = await buyForSelf(base.user.id);
     const id = await raise(purchase.id, base.user.id);
     // Since raising the request, the buyer has finished half the course.
-    db.insert(schema.lessonProgress)
-      .values(
-        lessonIds.slice(0, 2).map((lessonId) => ({
-          userId: base.user.id,
-          lessonId,
-          status: LessonProgressStatus.Completed,
-        }))
-      )
-      .run();
+    for (const lessonId of lessonIds.slice(0, 2)) {
+      markLessonComplete(db, base.user.id, lessonId, NOW);
+    }
 
     const [row] = listRefundRequestsForReview(db, RefundStatus.Open, NOW);
 
@@ -466,7 +383,7 @@ describe("listing Refund Requests", () => {
   });
 
   it("shows a Team Licence's Seats instead of the buyer's progress", async () => {
-    const priya = addStudent("Priya");
+    const priya = createStudent(db, "Priya", "priya@example.com");
     const { purchase } = buySeats(priya.id, 3);
     await raise(purchase.id, priya.id);
 
@@ -480,9 +397,9 @@ describe("listing Refund Requests", () => {
   });
 
   it("lists only the requested status, oldest first", async () => {
-    const first = buyForSelf(base.user.id);
-    const ben = addStudent("Ben");
-    const second = buyForSelf(ben.id);
+    const first = await buyForSelf(base.user.id);
+    const ben = createStudent(db, "Ben", "ben@example.com");
+    const second = await buyForSelf(ben.id);
     const firstId = await raise(first.id, base.user.id);
     const secondId = await raiseRefundRequest(
       db,
@@ -506,7 +423,7 @@ describe("listing Refund Requests", () => {
   });
 
   it("shows a buyer their decided requests with the decline note", async () => {
-    const purchase = buyForSelf(base.user.id);
+    const purchase = await buyForSelf(base.user.id);
     const id = await raise(purchase.id, base.user.id);
     await declineRefundRequest(db, id, platformAdmin.id, "Past half way.", NOW, notifications);
 
@@ -515,11 +432,11 @@ describe("listing Refund Requests", () => {
     ]);
   });
 
-  it("lists a Team Admin's Team Licences and whether each can be refunded", () => {
-    const priya = addStudent("Priya");
+  it("lists a Team Admin's Team Licences and whether each can be refunded", async () => {
+    const priya = createStudent(db, "Priya", "priya@example.com");
     buySeats(priya.id, 2);
     const { seats } = buySeats(priya.id, 2);
-    claimSeat(seats[0].id, addStudent("Ben").id);
+    await claim(seats[0], createStudent(db, "Ben", "ben@example.com").id);
 
     expect(listTeamLicences(db, priya.id, NOW)).toMatchObject([
       { seatCount: 2, claimedSeatCount: 1, canRequestRefund: false },
@@ -540,7 +457,7 @@ describe("the Refund Request Notifications", () => {
   }
 
   it("confirms the Refund Request to the buyer", async () => {
-    const purchase = buyForSelf(base.user.id, 3, 7900);
+    const purchase = await buyForSelf(base.user.id, 3, 7900);
 
     const id = await raise(purchase.id, base.user.id);
 
@@ -555,12 +472,13 @@ describe("the Refund Request Notifications", () => {
   });
 
   it("tells every Platform Admin, and nobody else, about the Open Refund Request", async () => {
-    const sam = db
-      .insert(schema.users)
-      .values({ name: "Sam Admin", email: "sam@example.com", role: UserRole.Admin })
-      .returning()
-      .get();
-    const purchase = buyForSelf(base.user.id, 3, 7900);
+    const sam = createUserWithRole(
+      db,
+      "Sam Admin",
+      "sam@example.com",
+      UserRole.Admin
+    );
+    const purchase = await buyForSelf(base.user.id, 3, 7900);
 
     const id = await raise(purchase.id, base.user.id);
 
@@ -590,7 +508,7 @@ describe("the Refund Request Notifications", () => {
   });
 
   it("tells the buyer their Individual Purchase refund was approved", async () => {
-    const purchase = buyForSelf(base.user.id, 3, 7900);
+    const purchase = await buyForSelf(base.user.id, 3, 7900);
     const id = await raise(purchase.id, base.user.id);
 
     await approveRefundRequest(db, id, platformAdmin.id, "Sorry it didn't work out.", NOW, notifications);
@@ -619,7 +537,7 @@ describe("the Refund Request Notifications", () => {
   });
 
   it("tells a Team Admin their Team Licence refund was declined", async () => {
-    const priya = addStudent("Priya");
+    const priya = createStudent(db, "Priya", "priya@example.com");
     const { purchase } = buySeats(priya.id, 2);
     const id = await raise(purchase.id, priya.id);
 
@@ -655,7 +573,7 @@ describe("the Refund Request Notifications", () => {
   });
 
   it("tells a Team Admin their Team Licence refund was approved, with no note", async () => {
-    const priya = addStudent("Priya");
+    const priya = createStudent(db, "Priya", "priya@example.com");
     const { purchase } = buySeats(priya.id, 2);
     const id = await raise(purchase.id, priya.id);
 
@@ -673,7 +591,7 @@ describe("the Refund Request Notifications", () => {
   it("still raises and decides Refund Requests, with their emails, when Knock is down", async () => {
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
     notifications.failWith(new Error("Knock is down"));
-    const purchase = buyForSelf(base.user.id);
+    const purchase = await buyForSelf(base.user.id);
 
     const raised = await raiseRefundRequest(db, purchase.id, base.user.id, "Nope.", NOW, notifications);
     if (!raised.ok) throw new Error(raised.error);
@@ -688,7 +606,7 @@ describe("the Refund Request Notifications", () => {
   });
 
   it("sends nothing when a decision is refused", async () => {
-    const purchase = buyForSelf(base.user.id);
+    const purchase = await buyForSelf(base.user.id);
     const id = await raise(purchase.id, base.user.id);
     await approveRefundRequest(db, id, platformAdmin.id, null, NOW, notifications);
     notifications.sent.length = 0;

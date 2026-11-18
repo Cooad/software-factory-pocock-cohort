@@ -1,6 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { createTestDb, seedBaseData } from "~/test/setup";
-import { eq } from "drizzle-orm";
+import {
+  createTestDb,
+  createUserWithRole,
+  seedBaseData,
+} from "~/test/setup";
 import * as schema from "~/db/schema";
 import {
   getFeedPreferences,
@@ -9,6 +12,11 @@ import {
   syncAllUsers,
   syncUser,
 } from "./notification-preferences.server";
+import { createCourse } from "./courses.server";
+import {
+  createIndividualPurchase,
+  createTeamLicence,
+} from "./purchases.server";
 import {
   fakeNotifications,
   type FakeNotifications,
@@ -187,33 +195,18 @@ describe("changing a feed preference", () => {
 });
 
 describe("which switches a person sees", () => {
+  const NOW = new Date(2026, 9, 6, 12, 0, 0);
+
   function buyIndividually(userId: number) {
-    return db
-      .insert(schema.purchases)
-      .values({ userId, courseId: base.course.id, amountPaid: 4900 })
-      .returning()
-      .get();
+    return createIndividualPurchase(db, userId, base.course.id, 4900, null, NOW);
   }
 
   function buyTeamLicence(userId: number) {
-    const purchase = buyIndividually(userId);
-    const team = db.insert(schema.teams).values({}).returning().get();
-    db.insert(schema.coupons)
-      .values({
-        teamId: team.id,
-        courseId: base.course.id,
-        code: `SEAT-${purchase.id}`,
-        purchaseId: purchase.id,
-      })
-      .run();
+    createTeamLicence(db, userId, base.course.id, 4900, null, 1, NOW);
   }
 
   function addUser(name: string, role: schema.UserRole) {
-    return db
-      .insert(schema.users)
-      .values({ name, email: `${name}@example.com`, role })
-      .returning()
-      .get();
+    return createUserWithRole(db, name, `${name}@example.com`, role);
   }
 
   it("shows a Student with nothing only Discussion Replies", () => {
@@ -259,10 +252,16 @@ describe("which switches a person sees", () => {
 
   it("treats a Platform Admin who owns a course as an Instructor too", () => {
     const admin = addUser("Alex", schema.UserRole.Admin);
-    db.update(schema.courses)
-      .set({ instructorId: admin.id })
-      .where(eq(schema.courses.id, base.course.id))
-      .run();
+    createCourse(
+      db,
+      "Admin Course",
+      "admin-course",
+      "A course a Platform Admin owns",
+      "## Admin Course",
+      admin.id,
+      base.category.id,
+      null
+    );
 
     expect(visibleNotificationCategories(db, admin.id)).toEqual([
       "enrollments",

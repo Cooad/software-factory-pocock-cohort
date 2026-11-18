@@ -4,7 +4,7 @@ import type { Route } from "./+types/api.video-tracking";
 import { getCurrentUserId } from "~/lib/session";
 import { parseJsonBody } from "~/lib/validation";
 import { db } from "~/db";
-import { videoWatchEvents } from "~/db/schema";
+import { recordVideoWatchEvent } from "~/lib/video-tracking.server";
 
 const videoTrackingSchema = z.object({
   lessonId: z.number(),
@@ -26,16 +26,7 @@ export async function action({ request }: Route.ActionArgs) {
 
   const { lessonId, eventType, positionSeconds } = parsed.data;
 
-  db
-    .insert(videoWatchEvents)
-    .values({
-      userId: currentUserId,
-      lessonId,
-      eventType,
-      positionSeconds,
-    })
-    .returning()
-    .get();
+  recordVideoWatchEvent(db, currentUserId, lessonId, eventType, positionSeconds);
 
   return { success: true };
 }

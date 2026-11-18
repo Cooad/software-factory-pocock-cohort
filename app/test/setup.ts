@@ -4,6 +4,10 @@ import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import path from "path";
 import { fileURLToPath } from "url";
 import * as schema from "~/db/schema";
+import { CourseStatus, UserRole } from "~/db/schema";
+import { createCategory } from "~/lib/categories.server";
+import { createCourse, setCourseStatus } from "~/lib/courses.server";
+import { changeUserRole, createStudent } from "~/lib/users.server";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -28,50 +32,48 @@ export function createTestDb() {
   return testDb;
 }
 
+export function createUserWithRole(
+  testDb: ReturnType<typeof createTestDb>,
+  name: string,
+  email: string,
+  role: UserRole
+) {
+  const student = createStudent(testDb, name, email);
+  return changeUserRole(testDb, student.id, role);
+}
+
 /**
  * Seeds a minimal set of base data (user, category, course) that most tests need.
  * Returns the created IDs for use in test assertions.
  */
 export function seedBaseData(testDb: ReturnType<typeof createTestDb>) {
-  const user = testDb
-    .insert(schema.users)
-    .values({
-      name: "Test User",
-      email: "test@example.com",
-      role: schema.UserRole.Student,
-    })
-    .returning()
-    .get();
+  const user = createStudent(testDb, "Test User", "test@example.com");
 
-  const instructor = testDb
-    .insert(schema.users)
-    .values({
-      name: "Test Instructor",
-      email: "instructor@example.com",
-      role: schema.UserRole.Instructor,
-    })
-    .returning()
-    .get();
+  const instructor = createUserWithRole(
+    testDb,
+    "Test Instructor",
+    "instructor@example.com",
+    UserRole.Instructor
+  );
 
-  const category = testDb
-    .insert(schema.categories)
-    .values({ name: "Programming", slug: "programming" })
-    .returning()
-    .get();
+  const category = createCategory(testDb, "Programming");
 
-  const course = testDb
-    .insert(schema.courses)
-    .values({
-      title: "Test Course",
-      slug: "test-course",
-      description: "A test course",
-      salesCopy: "## Test Course\n\nSales copy for the test course.",
-      instructorId: instructor.id,
-      categoryId: category.id,
-      status: schema.CourseStatus.Published,
-    })
-    .returning()
-    .get();
+  const draft = createCourse(
+    testDb,
+    "Test Course",
+    "test-course",
+    "A test course",
+    "## Test Course\n\nSales copy for the test course.",
+    instructor.id,
+    category.id,
+    null
+  );
+  const course = setCourseStatus(
+    testDb,
+    draft.id,
+    CourseStatus.Published,
+    new Date()
+  );
 
   return { user, instructor, category, course };
 }

@@ -5,6 +5,7 @@ import { z } from "zod";
 import type { Route } from "./+types/admin.categories";
 import { getCurrentUserId } from "~/lib/session";
 import { parseFormData } from "~/lib/validation";
+import { createCategory, updateCategory } from "~/lib/categories.server";
 import { UserRole, categories, courses, users } from "~/db/schema";
 import { db } from "~/db";
 import { eq, sql } from "drizzle-orm";
@@ -35,29 +36,6 @@ function getUserById(id: number) {
   return db.select().from(users).where(eq(users.id, id)).get();
 }
 
-function slugify(name: string) {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "");
-}
-
-function getCategoryBySlug(slug: string) {
-  return db
-    .select()
-    .from(categories)
-    .where(eq(categories.slug, slug))
-    .get();
-}
-
-function getCategoryByName(name: string) {
-  return db
-    .select()
-    .from(categories)
-    .where(eq(categories.name, name))
-    .get();
-}
-
 function getAllCategoriesWithCourseCounts() {
   return db
     .select({
@@ -71,47 +49,6 @@ function getAllCategoriesWithCourseCounts() {
     .groupBy(categories.id)
     .orderBy(categories.name)
     .all();
-}
-
-function createCategory(name: string) {
-  const slug = slugify(name);
-
-  const existingName = getCategoryByName(name);
-  if (existingName) {
-    throw new Error(`A category with the name "${name}" already exists.`);
-  }
-
-  const existingSlug = getCategoryBySlug(slug);
-  if (existingSlug) {
-    throw new Error(`A category with the slug "${slug}" already exists.`);
-  }
-
-  return db
-    .insert(categories)
-    .values({ name, slug })
-    .returning()
-    .get();
-}
-
-function updateCategory(id: number, name: string) {
-  const slug = slugify(name);
-
-  const existingName = getCategoryByName(name);
-  if (existingName && existingName.id !== id) {
-    throw new Error(`A category with the name "${name}" already exists.`);
-  }
-
-  const existingSlug = getCategoryBySlug(slug);
-  if (existingSlug && existingSlug.id !== id) {
-    throw new Error(`A category with the slug "${slug}" already exists.`);
-  }
-
-  return db
-    .update(categories)
-    .set({ name, slug })
-    .where(eq(categories.id, id))
-    .returning()
-    .get();
 }
 
 function deleteCategory(id: number) {
@@ -190,7 +127,7 @@ export async function action({ request }: Route.ActionArgs) {
 
   if (intent === "create") {
     try {
-      createCategory(parsed.data.name);
+      createCategory(db, parsed.data.name);
       return { success: true, message: "Category created." };
     } catch (e) {
       return data(
@@ -202,7 +139,7 @@ export async function action({ request }: Route.ActionArgs) {
 
   if (intent === "update") {
     try {
-      updateCategory(parsed.data.categoryId, parsed.data.name);
+      updateCategory(db, parsed.data.categoryId, parsed.data.name);
       return { success: true, message: "Category updated." };
     } catch (e) {
       return data(
