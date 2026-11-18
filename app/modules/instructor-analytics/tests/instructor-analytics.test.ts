@@ -224,11 +224,11 @@ function analytics(
 }
 
 function asInstructor(params: Record<string, string> = {}) {
-  return analytics({ userId: instructor.id, isAdmin: false }, params);
+  return analytics({ userId: instructor.id, isPlatformAdmin: false }, params);
 }
 
 function asAdmin(params: Record<string, string> = {}) {
-  return analytics({ userId: admin.id, isAdmin: true }, params);
+  return analytics({ userId: admin.id, isPlatformAdmin: true }, params);
 }
 
 // ─── Tests ───
@@ -291,8 +291,8 @@ describe("who sees what", () => {
   });
 
   it("flags itself as an admin view only for admins", () => {
-    expect(asAdmin().isAdmin).toBe(true);
-    expect(asInstructor().isAdmin).toBe(false);
+    expect(asAdmin().isPlatformAdmin).toBe(true);
+    expect(asInstructor().isPlatformAdmin).toBe(false);
   });
 });
 
@@ -836,7 +836,7 @@ describe("refund exposure", () => {
     buy(addUser("Sam Student").id, course.id, 1000, { daysBack: 3 });
     const aWeekLater = new Date(NOW.getTime() + 7 * DAY_MS);
     const twelveDaysLater = new Date(NOW.getTime() + 12 * DAY_MS);
-    const viewer = { userId: instructor.id, isAdmin: false };
+    const viewer = { userId: instructor.id, isPlatformAdmin: false };
     const params = new URLSearchParams();
 
     expect(
@@ -855,7 +855,7 @@ describe("the publish-your-first-course prompt", () => {
     const newcomer = addUser("New Instructor", UserRole.Instructor);
     addCourse(newcomer.id, "Work in progress", CourseStatus.Draft);
 
-    expect(analytics({ userId: newcomer.id, isAdmin: false }).unpublished).toBe(
+    expect(analytics({ userId: newcomer.id, isPlatformAdmin: false }).unpublished).toBe(
       true
     );
   });
