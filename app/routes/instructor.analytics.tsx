@@ -65,11 +65,7 @@ export function meta() {
 
 export async function loader({ request, url }: Route.LoaderArgs) {
   const person = await requireInstructorOrPlatformAdmin(request);
-  return instructorAnalytics.get(
-    { userId: person.userId, isPlatformAdmin: person.isPlatformAdmin },
-    url.searchParams,
-    new Date()
-  );
+  return instructorAnalytics.get(person, url.searchParams, new Date());
 }
 
 function MoneyCard({

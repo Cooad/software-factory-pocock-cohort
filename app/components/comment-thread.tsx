@@ -355,7 +355,7 @@ export function CommentThread({
 }: {
   comments: RenderedComment[];
   currentUserId: number | null;
-  /** Owning instructor or admin — may delete anyone's comment. */
+  /** The viewer can Manage the course, so may delete anyone's comment. */
   canManage: boolean;
   canPost: boolean;
   instructorName: string;

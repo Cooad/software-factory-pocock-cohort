@@ -52,6 +52,7 @@ import { calendarDay, lastDayOfWindow } from "~/lib/refunds.server";
 
 export type Db = BetterSQLite3Database<typeof schema>;
 
+/** Structural, so a route can pass the signed-in person as it is. */
 export type AnalyticsViewer = { userId: number; isPlatformAdmin: boolean };
 
 // "course" is the second tab; anything else falls back to the overview.

@@ -67,11 +67,7 @@ export async function getCourseAccess(
   canManage: boolean;
 }> {
   const viewer = await getViewer(request);
-  return {
-    viewer,
-    decision: courseAccess.decide(viewer, courseId),
-    canManage: courseAccess.canManage(viewer, courseId),
-  };
+  return { viewer, ...courseAccess.assess(viewer, courseId) };
 }
 
 async function requirePerson(request: Request): Promise<Person> {
@@ -93,13 +89,10 @@ export async function requireContentAccess(
   request: Request,
   courseId: number
 ): Promise<{ userId: number; canManage: boolean }> {
-  const { viewer, decision, canManage } = await getCourseAccess(
-    request,
-    courseId
-  );
+  const { decision, canManage } = await getCourseAccess(request, courseId);
   switch (decision.kind) {
     case "allowed":
-      return { userId: viewer.userId!, canManage };
+      return { userId: decision.userId, canManage };
     case "signed-out":
       return signedOut();
     case "course-not-found":
@@ -118,14 +111,12 @@ export async function requireManagePermission(
   request: Request,
   courseId: number
 ): Promise<{ userId: number }> {
-  const { viewer, decision, canManage } = await getCourseAccess(
-    request,
-    courseId
-  );
+  const { decision, canManage } = await getCourseAccess(request, courseId);
   if (decision.kind === "course-not-found") notFound();
   if (decision.kind === "signed-out") signedOut();
-  if (!canManage) forbidden();
-  return { userId: viewer.userId! };
+  // Whoever can Manage the course has Course Access through it.
+  if (!canManage || decision.kind !== "allowed") forbidden();
+  return { userId: decision.userId };
 }
 
 /** Throws 401 when signed out, 403 unless a Platform Admin. */

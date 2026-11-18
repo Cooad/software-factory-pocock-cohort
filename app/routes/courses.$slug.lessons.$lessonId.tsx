@@ -715,10 +715,7 @@ export async function loader({ params, request }: Route.LoaderArgs) {
     throw data("Lesson not found in this course", { status: 404 });
   }
 
-  const { viewer, decision, canManage } = await getCourseAccess(
-    request,
-    course.id
-  );
+  const { decision, canManage } = await getCourseAccess(request, course.id);
 
   // Without Course Access the page is a paywall: nothing of the lesson's
   // content (body, video, quiz, discussion, Bookmarks, Notes) is sent, and
@@ -735,24 +732,20 @@ export async function loader({ params, request }: Route.LoaderArgs) {
     };
   }
 
-  // Course Access means someone is signed in.
-  const currentUserId = viewer.userId!;
+  const currentUserId = decision.userId;
   let lastWatchPosition = 0;
   let watchProgress = 0;
   const lessonProgressMap: Record<number, string> = {};
 
-  // Mark lesson as in-progress when viewed
   markLessonInProgress(currentUserId, lessonId);
   const progress = getLessonProgress(currentUserId, lessonId);
   const lessonStatus: string | null = progress?.status ?? null;
 
-  // Get progress for all lessons in course (for curriculum sidebar)
   const progressRecords = getLessonProgressForCourse(currentUserId, course.id);
   for (const record of progressRecords) {
     lessonProgressMap[record.lessonId] = record.status;
   }
 
-  // Get video watch state for resume and progress display
   if (lesson.videoUrl) {
     lastWatchPosition = getLastWatchPosition(currentUserId, lessonId);
     const videoDurationSeconds = (lesson.durationMinutes ?? 0) * 60;
@@ -875,12 +868,14 @@ export async function action({ params, request }: Route.ActionArgs) {
     throw data("Course not found", { status: 404 });
   }
 
-  // Every intent needs Course Access; check it here rather than relying on the
-  // loader — loader guards don't protect actions. The viewer is read once.
+  // Every intent needs Course Access and a lesson in this course; check both
+  // here rather than relying on the loader — loader guards don't protect
+  // actions. The viewer is read once.
   const { userId: currentUserId, canManage } = await requireContentAccess(
     request,
     course.id
   );
+  requireLessonInCourse(lessonId, course.id);
 
   const formData = await request.formData();
   const intent = formData.get("intent");
@@ -960,8 +955,6 @@ export async function action({ params, request }: Route.ActionArgs) {
   }
 
   if (intent === "toggle-bookmark" || intent === "save-note") {
-    requireLessonInCourse(lessonId, course.id);
-
     if (intent === "toggle-bookmark") {
       const bookmarked = toggleBookmark(
         db,
@@ -988,7 +981,6 @@ export async function action({ params, request }: Route.ActionArgs) {
   }
 
   if (intent === "mark-complete") {
-    requireLessonInCourse(lessonId, course.id);
     markLessonComplete(currentUserId, lessonId);
     return { success: true };
   }
@@ -998,7 +990,6 @@ export async function action({ params, request }: Route.ActionArgs) {
     if (isNaN(quizId)) {
       throw data("Invalid quiz ID", { status: 400 });
     }
-    requireLessonInCourse(lessonId, course.id);
     requireQuizOnLesson(quizId, lessonId);
 
     // Collect answers: form fields named "question-{questionId}" with value = optionId
@@ -1412,15 +1403,15 @@ function LessonPaywall({
             <ShieldAlert className="mx-auto mb-4 size-16 text-amber-500" />
             <h1 className="mb-3 text-2xl font-bold">Access Restricted</h1>
             <p className="mb-4 text-muted-foreground">
-              You purchased this course with a Purchasing Power Parity discount
-              while in <strong>{paywall.purchaseCountryName}</strong>, but
-              you're currently accessing from{" "}
+              You bought this course at a Purchasing-Power Price while in{" "}
+              <strong>{paywall.purchaseCountryName}</strong>, but you're
+              currently accessing from{" "}
               <strong>{paywall.currentCountryName}</strong>.
             </p>
             <p className="mb-6 text-sm text-muted-foreground">
-              PPP-discounted courses can only be accessed from the country where
-              the purchase was made. This helps keep courses affordable for
-              students in lower-income regions.
+              A course bought at a Purchasing-Power Price is Region-Locked to
+              the country it was bought in. This helps keep courses affordable
+              for students in lower-income regions.
             </p>
             <div className="flex items-center justify-center gap-3">
               <Link to={coursePath}>
