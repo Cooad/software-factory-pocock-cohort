@@ -1,8 +1,6 @@
-// Pushes and commits every Notification workflow to Knock through the
-// Management API, so no workflow has to be built by hand in the dashboard.
-// Each workflow is one in-app feed step on the Cadence feed channel, in its
-// preference category. Safe to re-run: it overwrites what is there, including
-// a workflow in the wrong category.
+// Exists so no Notification workflow has to be built by hand in the Knock
+// dashboard. Safe to re-run: it overwrites what is there, including a
+// workflow in the wrong category.
 //
 //   npm run knock:push-workflows                          # Development
 //   npm run knock:push-workflows -- --promote production  # then promote
@@ -16,10 +14,8 @@ import { fileURLToPath } from "node:url";
 import type { NotificationKind } from "../app/lib/notification-feed";
 import { KNOCK_WORKFLOWS } from "../app/lib/notifications.knock.server";
 
-/**
- * The feed body Knock stores per workflow. Cadence writes the row itself from
- * the trigger data, so these only show in Knock's dashboard and previews.
- */
+// Cadence writes the feed row itself from the trigger data, so these bodies
+// only show in Knock's dashboard and previews.
 const TEMPLATES: Record<NotificationKind, { name: string; body: string }> = {
   "discussion-reply": {
     name: "Discussion Reply",

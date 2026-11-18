@@ -273,7 +273,6 @@ export default function Dashboard({ loaderData }: Route.ComponentProps) {
 
   return (
     <div className="mx-auto max-w-7xl p-6 lg:p-8">
-      {/* Breadcrumb */}
       <nav className="mb-6 text-sm text-muted-foreground">
         <Link to="/" className="hover:text-foreground">
           Home
@@ -302,7 +301,6 @@ export default function Dashboard({ loaderData }: Route.ComponentProps) {
         </div>
       ) : (
         <div className="space-y-8">
-          {/* In Progress Courses */}
           {inProgressCourses.length > 0 && (
             <section>
               <h2 className="mb-4 text-xl font-semibold">In Progress</h2>
@@ -371,7 +369,6 @@ export default function Dashboard({ loaderData }: Route.ComponentProps) {
             </section>
           )}
 
-          {/* Completed Courses */}
           {completedCourses.length > 0 && (
             <section>
               <h2 className="mb-4 text-xl font-semibold">Completed</h2>

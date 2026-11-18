@@ -5,25 +5,17 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-/**
- * Format a price in cents to a display string.
- * 0 or null/undefined → "Free", otherwise "$X.XX".
- */
 export function formatPrice(cents: number | null | undefined): string {
   if (!cents) return "Free";
   return `$${(cents / 100).toFixed(2)}`;
 }
 
-/** Whole days between an ISO timestamp and now. Negative values clamp to 0. */
 export function daysSince(iso: string): number {
   const elapsed = Date.now() - new Date(iso).getTime();
   return Math.max(0, Math.floor(elapsed / 86_400_000));
 }
 
 /**
- * A short "how long ago" label — "just now", "5m ago", "3h ago", "2d ago",
- * falling back to an absolute date beyond a month.
- *
  * Callers should render this with suppressHydrationWarning: the server and the
  * client can land either side of a minute boundary.
  */

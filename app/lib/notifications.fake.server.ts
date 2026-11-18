@@ -8,13 +8,8 @@ import type {
   Notifications,
 } from "~/lib/notifications.server";
 
-// ─── In-memory Notifications adapter, for tests ───
-// Records every Notification sent, with its idempotency key, in `sent`.
-// `feedOf(userId)` is what that person's feed would show: what was sent to
-// them, minus anything archived. Every identified user is in `users`, and each
-// user's preference set in `preferences` (each write merges in, like the Knock
-// adapter). `failWith(error)` makes every later call throw, to test that
-// services tolerate a failing port.
+// Preference writes merge in, like the Knock adapter's. `failWith(error)`
+// makes every later call throw, to test that services tolerate a failing port.
 
 export type SentNotification = Notification & { idempotencyKey: string };
 

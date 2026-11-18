@@ -42,20 +42,14 @@ function findPurchase(userId: number, courseId: number) {
     .get();
 }
 
-// ─── Access Resolution ───
-// One place that answers "who is this, and what may they do with this course?".
-//
 // getAccess never throws — the lesson page needs to render a paywall preview for
 // signed-out and unenrolled visitors rather than erroring. The require* wrappers
-// are built on it for the routes that should just reject.
-//
-// Uses positional parameters (project convention).
+// are for the routes that should just reject.
 
 export type Access = {
   userId: number | null;
   user: ReturnType<typeof getUserById>;
   isAdmin: boolean;
-  /** The instructor who owns this specific course. */
   isOwningInstructor: boolean;
   /** Owning instructor or admin — the people who speak for the course. */
   isStaff: boolean;
@@ -63,10 +57,6 @@ export type Access = {
   pppBlocked: boolean;
   pppBlockedCountry: string | null;
   pppPurchaseCountry: string | null;
-  /**
-   * May they read the course's content (lesson bodies, comments)?
-   * Staff always can. Students need an enrollment that isn't PPP-blocked.
-   */
   canViewContent: boolean;
 };
 
@@ -131,9 +121,6 @@ export async function getAccess(
   };
 }
 
-/**
- * Throws 401 unless someone is signed in. Returns their user id.
- */
 export async function requireUserId(request: Request): Promise<number> {
   const userId = await getCurrentUserId(request);
   if (!userId) {
@@ -142,10 +129,7 @@ export async function requireUserId(request: Request): Promise<number> {
   return userId;
 }
 
-/**
- * Throws 401 when signed out, 403 when the user can't see the course's content.
- * Use in actions — loader guards don't protect actions.
- */
+/** Use in actions — loader guards don't protect actions. */
 export async function requireContentAccess(
   request: Request,
   courseId: number
@@ -163,9 +147,6 @@ export async function requireContentAccess(
   return access;
 }
 
-/**
- * Throws unless the user is the course's own instructor, or an admin.
- */
 export async function requireStaff(
   request: Request,
   courseId: number
@@ -183,10 +164,6 @@ export async function requireStaff(
   return access;
 }
 
-/**
- * Throws unless the user is an instructor or an admin, without tying them to a
- * particular course — for pages that span all of someone's courses.
- */
 export async function requireInstructorOrAdmin(request: Request) {
   const userId = await requireUserId(request);
   const user = getUserById(userId);

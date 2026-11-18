@@ -42,8 +42,6 @@ export enum TeamMemberRole {
   Member = "member",
 }
 
-// ─── Tables ───
-
 export const users = sqliteTable("users", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   name: text("name").notNull(),
@@ -240,7 +238,6 @@ export const refunds = sqliteTable(
       .notNull()
       .$type<RefundStatus>()
       .default(RefundStatus.Open),
-    // The student's own words, in the box on the course page.
     reason: text("reason").notNull(),
     // Null until someone approves — a declined request refunds nothing.
     amountRefunded: integer("amount_refunded"),

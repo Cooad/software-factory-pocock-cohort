@@ -5,10 +5,6 @@ import { MAX_RATING } from "~/lib/ratings";
 
 const STARS = Array.from({ length: MAX_RATING }, (_, i) => i + 1);
 
-/**
- * Read-only average rating display. Renders partially-filled stars by clipping
- * a filled star over an outlined one.
- */
 export function StarRating({
   average,
   count,
@@ -84,10 +80,7 @@ export function StarRating({
   );
 }
 
-/**
- * Interactive star picker. Each star is a submit button, so it works without
- * JavaScript when rendered inside a form.
- */
+// Each star is a submit button, so the picker works without JavaScript.
 export function StarRatingInput({
   value,
   name = "rating",

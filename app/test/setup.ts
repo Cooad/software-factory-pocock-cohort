@@ -9,13 +9,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const migrationsFolder = path.resolve(__dirname, "../../drizzle");
 
-/**
- * Creates a fresh in-memory SQLite database with all tables for testing.
- * Each call returns a new isolated database instance.
- *
- * Uses the same Drizzle migrations as the live database, ensuring
- * test and production schemas are always in sync.
- */
+// Built from the same Drizzle migrations as the live database, so test and
+// production schemas cannot drift apart.
 export function createTestDb() {
   const sqlite = new Database(":memory:");
   sqlite.pragma("journal_mode = WAL");
@@ -28,10 +23,6 @@ export function createTestDb() {
   return testDb;
 }
 
-/**
- * Seeds a minimal set of base data (user, category, course) that most tests need.
- * Returns the created IDs for use in test assertions.
- */
 export function seedBaseData(testDb: ReturnType<typeof createTestDb>) {
   const user = testDb
     .insert(schema.users)

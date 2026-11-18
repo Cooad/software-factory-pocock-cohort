@@ -9,7 +9,6 @@ import {
   type NotificationFeed,
 } from "~/lib/notification-feed";
 
-// ─── Knock adapter for the browser's NotificationFeed ───
 // The only browser code that imports Knock. One Knock client and one
 // real-time socket per signed-in person; Knock pushes new Notifications down
 // the socket, so nothing polls. `dispose()` tears it all down, so switching
@@ -17,7 +16,6 @@ import {
 
 const PAGE_SIZE = 20;
 
-/** Refresh the signed user token this long before it expires. */
 const REFRESH_BEFORE_EXPIRY_MS = 5 * 60 * 1000;
 
 /**

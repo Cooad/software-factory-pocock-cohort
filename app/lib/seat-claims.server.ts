@@ -14,13 +14,6 @@ import {
   type Notifications,
 } from "~/lib/notifications.server";
 
-// ─── Seat claims ───
-// A Student claiming a Seat on a Team Licence, which gives them an Enrollment
-// through the Enrollment service. See GLOSSARY.md for the language.
-//
-// Every function takes the database first, so tests can hand in an in-memory
-// one. Uses positional parameters (project convention).
-
 export type Db = BetterSQLite3Database<typeof schema>;
 
 type Seat = typeof coupons.$inferSelect;
@@ -35,11 +28,7 @@ export type ClaimSeatResult =
   | { ok: true; seat: Seat; enrollment: Enrollment }
   | { ok: false; error: string };
 
-/**
- * Claims a Seat, then sends the Seat claim Notification to the Team Admin who
- * bought the Team Licence and the new Enrollment Notification to the course's
- * Instructor. A Notification failure is logged and never fails the claim.
- */
+/** A Notification failure is logged and never fails the claim. */
 export async function claimSeat(
   db: Db,
   seatCode: string,
@@ -166,7 +155,6 @@ async function notifyTeamAdmin(
   );
 }
 
-/** Seats on a Team Licence nobody has claimed and that weren't refunded. */
 function countSeatsLeft(db: Db, purchaseId: number) {
   const row = db
     .select({ seatsLeft: count() })

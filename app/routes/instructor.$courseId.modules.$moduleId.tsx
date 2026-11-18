@@ -225,7 +225,6 @@ export default function InstructorModulePreview({
 
   return (
     <div className="mx-auto max-w-4xl p-6 lg:p-8">
-      {/* Back link and breadcrumb */}
       <div className="mb-6 flex items-center justify-between">
         <nav className="flex items-center gap-2 text-sm text-muted-foreground">
           <Link
@@ -246,7 +245,6 @@ export default function InstructorModulePreview({
         </Link>
       </div>
 
-      {/* Module title and stats */}
       <h1 className="mb-2 text-3xl font-bold">{mod.title}</h1>
       <div className="mb-6 flex items-center gap-4 text-sm text-muted-foreground">
         <span className="flex items-center gap-1">
@@ -261,7 +259,6 @@ export default function InstructorModulePreview({
         )}
       </div>
 
-      {/* Instructor card */}
       <Card className="mb-8">
         <CardContent className="p-4">
           <div className="flex items-center gap-3">
@@ -282,7 +279,6 @@ export default function InstructorModulePreview({
         </CardContent>
       </Card>
 
-      {/* Lesson list */}
       <h2 className="mb-4 text-xl font-semibold">Lessons</h2>
       {mod.lessons.length === 0 ? (
         <p className="text-muted-foreground">

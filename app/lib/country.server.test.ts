@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// Mock the session module
 const mockSession = new Map<string, string>();
 vi.mock("~/lib/session", () => ({
   getSession: vi.fn(async () => ({
@@ -23,8 +22,6 @@ describe("resolveCountry", () => {
     mockSession.clear();
     mockFetch.mockReset();
   });
-
-  // ─── Priority Ordering ───
 
   it("uses dev session override first", async () => {
     mockSession.set("devCountry", "IN");
@@ -52,8 +49,6 @@ describe("resolveCountry", () => {
     expect(result).toBeNull();
   });
 
-  // ─── Dev Override Behavior ───
-
   it("normalizes dev country to uppercase", async () => {
     mockSession.set("devCountry", "pl");
     const result = await resolveCountry(makeRequest());
@@ -65,8 +60,6 @@ describe("resolveCountry", () => {
     const result = await resolveCountry(makeRequest());
     expect(result).toBeNull();
   });
-
-  // ─── CF-IPCountry Behavior ───
 
   it("normalizes CF-IPCountry to uppercase", async () => {
     const result = await resolveCountry(makeRequest({ "CF-IPCountry": "de" }));

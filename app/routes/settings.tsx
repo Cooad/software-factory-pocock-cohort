@@ -188,7 +188,6 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 
   return (
     <div className="mx-auto max-w-7xl p-6 lg:p-8">
-      {/* Breadcrumb */}
       <nav className="mb-6 text-sm text-muted-foreground">
         <Link to="/" className="hover:text-foreground">
           Home
@@ -329,10 +328,6 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
   );
 }
 
-/**
- * One category's feed switch. Saves as soon as it's flipped and shows the new
- * state while saving; a failed save puts it back and shows a toast.
- */
 function NotificationSwitch({
   category,
   enabled,

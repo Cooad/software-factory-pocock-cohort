@@ -30,13 +30,7 @@ import {
   type RuleBreak,
 } from "~/lib/refund-rules";
 
-// ─── Refunds ───
-// Everything about Refund Requests: whether a Purchase may be refunded, raising
-// a Refund Request, and a Platform Admin deciding one. See GLOSSARY.md for the
-// language and docs/adr/0001–0004 for why it works the way it does.
-//
-// Every function takes the database first, so tests can hand in an in-memory
-// one. Uses positional parameters (project convention).
+// See docs/adr/0001–0004 for why Refund Requests work the way they do.
 
 export type Db = BetterSQLite3Database<typeof schema>;
 type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
@@ -44,8 +38,6 @@ type Queryable = Db | Tx;
 
 type Purchase = typeof purchases.$inferSelect;
 type Seat = typeof coupons.$inferSelect;
-
-// ─── Calendar days ───
 
 // The fourteen-day window is counted in whole days, not hours — someone who
 // buys at 23:00 should still get the whole of their fourteenth day.
@@ -68,8 +60,6 @@ function isWithinWindow(purchasedAtIso: string, on: Date): boolean {
     day <= lastDayOfWindow(purchasedAtIso)
   );
 }
-
-// ─── Purchases and Seats ───
 
 function getPurchase(db: Queryable, purchaseId: number) {
   return db.select().from(purchases).where(eq(purchases.id, purchaseId)).get();
@@ -110,9 +100,8 @@ function getRefundRequestWithStatus(
 export type SeatAvailability = "available" | "claimed" | "on_hold" | "refunded";
 
 /**
- * Whether a Seat can be claimed right now. A Team Licence's Unclaimed Seats are
- * on hold while it has an Open Refund Request, and can never be claimed once
- * that request is approved.
+ * A Team Licence's Unclaimed Seats are on hold while it has an Open Refund
+ * Request, and can never be claimed once that request is approved.
  */
 export function getSeatAvailability(
   db: Queryable,
@@ -125,8 +114,6 @@ export function getSeatAvailability(
   }
   return "available";
 }
-
-// ─── Figures and rules ───
 
 function getLessonIds(db: Queryable, courseId: number): number[] {
   return db
@@ -181,9 +168,8 @@ function getSecondsWatched(db: Queryable, userId: number, lessonIds: number[]) {
 }
 
 /**
- * How far the buyer has got with what they bought. For an Individual Purchase
- * that is their own progress. A Team Licence gives its buyer nothing to watch,
- * so for one it is how many of its Seats have been claimed.
+ * A Team Licence gives its buyer nothing to watch, so for one these count its
+ * Claimed Seats instead of the buyer's own progress.
  */
 export type RefundFigures =
   | {
@@ -218,7 +204,6 @@ function getRefundFigures(db: Queryable, purchase: Purchase): RefundFigures {
   };
 }
 
-/** What the buyer is told when they can't raise a Refund Request. */
 const RULE_BREAK_ERRORS: Record<RuleBreak, string> = {
   window_closed: `The ${REFUND_WINDOW_DAYS}-day window has closed.`,
   watched_too_much:
@@ -229,9 +214,8 @@ const RULE_BREAK_ERRORS: Record<RuleBreak, string> = {
 };
 
 /**
- * The eligibility rules a Purchase breaks. `windowCheckedOn` is the day the
- * window is judged against: today when a buyer asks, and the day it was raised
- * when a Platform Admin looks at a Refund Request.
+ * `windowCheckedOn` is today when a buyer asks, and the day the Refund Request
+ * was raised when a Platform Admin looks at it.
  */
 function findRuleBreaks(
   purchase: Purchase,
@@ -263,16 +247,10 @@ function findRuleBreaks(
   return breaks;
 }
 
-// ─── Raising a Refund Request ───
-
 export type Failure = { ok: false; status: 400 | 403 | 404 | 409; error: string };
 
 type RefundCheck = { ok: true; purchase: Purchase } | Failure;
 
-/**
- * Whether this buyer may raise a Refund Request on this Purchase today. Only
- * the person who paid may, and only one Refund Request can be open at once.
- */
 export function checkRefundRequest(
   db: Queryable,
   purchaseId: number,
@@ -320,11 +298,7 @@ export type RefundOffer = {
   lastDayInWindow: string;
 };
 
-/**
- * What the course page offers a student who wants their money back: their
- * newest Individual Purchase of the course, if it can be refunded. Team
- * Licences are refunded from the team page instead.
- */
+/** Team Licences are refunded from the team page instead. */
 export function getRefundOffer(
   db: Queryable,
   buyerId: number,
@@ -454,8 +428,6 @@ export async function raiseRefundRequest(
   };
 }
 
-// ─── Listing Refund Requests ───
-
 const deciders = alias(users, "deciders");
 
 function selectRefundRequests(db: Queryable) {
@@ -502,9 +474,9 @@ export type RefundRequestForReview = {
 };
 
 /**
- * The Refund Requests a Platform Admin reviews, oldest first. The figures are
- * live, not a snapshot from when the request was raised: the buyer keeps the
- * course while it is open, so what matters is how far they have got now.
+ * The figures are live, not a snapshot from when the request was raised: the
+ * buyer keeps the course while it is open, so what matters is how far they
+ * have got now.
  */
 export function listRefundRequestsForReview(
   db: Queryable,
@@ -551,7 +523,6 @@ export function listRefundRequestsForReview(
   });
 }
 
-/** A buyer's own Refund Requests, newest first, for their Settings page. */
 export function listRefundRequestsForBuyer(db: Queryable, buyerId: number) {
   return selectRefundRequests(db)
     .where(eq(purchases.userId, buyerId))
@@ -570,7 +541,6 @@ export function listRefundRequestsForBuyer(db: Queryable, buyerId: number) {
     }));
 }
 
-/** A Team Admin's Team Licences, with what the team page needs to refund one. */
 export function listTeamLicences(db: Queryable, buyerId: number, now: Date) {
   const bought = db
     .select({
@@ -612,8 +582,6 @@ export function listTeamLicences(db: Queryable, buyerId: number, now: Date) {
   });
 }
 
-// ─── Deciding a Refund Request ───
-
 export type DecisionResult = { ok: true; email: Email } | Failure;
 
 function findOpenRefundRequest(
@@ -649,13 +617,10 @@ function findOpenRefundRequest(
 }
 
 /**
- * Approves an Open Refund Request and ends what its Purchase granted.
- *
- * - An Individual Purchase: the buyer loses their Enrollment, unless
- *   they also hold a Claimed Seat for the course (docs/adr/0004). Their progress stays
- *   (docs/adr/0001).
- * - A Team Licence: its Unclaimed Seats can never be claimed. Refused if any
- *   Seat has been claimed (docs/adr/0003).
+ * An Individual Purchase's buyer keeps their Enrollment if they also hold a
+ * Claimed Seat for the course (docs/adr/0004), and always keeps their progress
+ * (docs/adr/0001). A Team Licence with any Claimed Seat is refused
+ * (docs/adr/0003).
  */
 export async function approveRefundRequest(
   db: Db,
@@ -735,9 +700,8 @@ export async function approveRefundRequest(
 }
 
 /**
- * Declines an Open Refund Request. Nothing the Purchase granted is lost, and
- * the buyer may raise a new Refund Request. The note is required: it is how
- * the buyer learns whether another request is worth raising.
+ * The note is required: it is how the buyer learns whether another Refund
+ * Request is worth raising.
  */
 export async function declineRefundRequest(
   db: Db,
@@ -786,7 +750,6 @@ export async function declineRefundRequest(
   return result;
 }
 
-/** The email the buyer gets once their Refund Request is decided. */
 function buildDecisionEmail(
   db: Queryable,
   purchase: Purchase,
@@ -834,12 +797,6 @@ function buildDecisionEmail(
   };
 }
 
-// ─── Notifications ───
-
-/**
- * Tells the buyer how their Refund Request was decided. Reads the decision
- * back after it has committed.
- */
 async function notifyDecision(
   db: Db,
   refundRequestId: number,

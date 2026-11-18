@@ -567,7 +567,6 @@ function computeResult(userId: any, quizId: any, selectedAnswers: any): any {
 }
 
 /**
- * Renders every comment body to sanitised HTML, preserving the reply nesting.
  * Comments are untrusted input, so this must be renderComment — never
  * renderMarkdown, which lets raw HTML through for trusted lesson content.
  */
@@ -645,7 +644,6 @@ export async function loader({ params, request }: Route.LoaderArgs) {
     throw data("Module not found", { status: 404 });
   }
 
-  // Verify lesson belongs to this course
   if (mod.courseId !== course.id) {
     throw data("Lesson not found in this course", { status: 404 });
   }
@@ -660,12 +658,10 @@ export async function loader({ params, request }: Route.LoaderArgs) {
 
   if (currentUserId) {
     if (enrolled) {
-      // Mark lesson as in-progress when viewed
       markLessonInProgress(currentUserId, lessonId);
       const progress = getLessonProgress(currentUserId, lessonId);
       lessonStatus = progress?.status ?? null;
 
-      // Get progress for all lessons in course (for curriculum sidebar)
       const progressRecords = getLessonProgressForCourse(
         currentUserId,
         course.id
@@ -674,7 +670,6 @@ export async function loader({ params, request }: Route.LoaderArgs) {
         lessonProgressMap[record.lessonId] = record.status;
       }
 
-      // Get video watch state for resume and progress display
       if (lesson.videoUrl) {
         lastWatchPosition = getLastWatchPosition(currentUserId, lessonId);
         const videoDurationSeconds = (lesson.durationMinutes ?? 0) * 60;
@@ -689,8 +684,8 @@ export async function loader({ params, request }: Route.LoaderArgs) {
     }
   }
 
-  // PPP Access Guard — resolved by getAccess, which treats a blocked user as
-  // having no access to the course's content at all.
+  // getAccess already treats a PPP-blocked user as having no access to the
+  // course's content at all.
   const { pppBlocked, pppBlockedCountry, pppPurchaseCountry, canViewContent } =
     access;
 
@@ -705,19 +700,16 @@ export async function loader({ params, request }: Route.LoaderArgs) {
   const bookmarked = studentId ? isBookmarked(db, studentId, lessonId) : false;
   const note = studentId ? (getNote(db, studentId, lessonId) ?? null) : null;
 
-  // Render lesson content from Markdown to HTML server-side
   const contentHtml = lesson.content
     ? await renderMarkdown(lesson.content)
     : null;
 
-  // Build prev/next navigation
   const allLessons = flattenCourseLessons(courseWithDetails);
   const currentIndex = allLessons.findIndex((l) => l.id === lessonId);
   const prevLesson = currentIndex > 0 ? allLessons[currentIndex - 1] : null;
   const nextLesson =
     currentIndex < allLessons.length - 1 ? allLessons[currentIndex + 1] : null;
 
-  // Check for quiz attached to this lesson
   const quizRecord = getQuizByLessonId(lessonId);
   let quiz: {
     id: number;
@@ -736,7 +728,7 @@ export async function loader({ params, request }: Route.LoaderArgs) {
   if (quizRecord) {
     const quizData = getQuizWithQuestions(quizRecord.id);
     if (quizData) {
-      // Strip isCorrect from options so answers aren't leaked to the client
+      // isCorrect stays on the server so answers aren't leaked to the client.
       quiz = {
         id: quizData.id,
         title: quizData.title,
@@ -933,7 +925,6 @@ export async function action({ params, request }: Route.ActionArgs) {
       throw data("Invalid quiz ID", { status: 400 });
     }
 
-    // Collect answers: form fields named "question-{questionId}" with value = optionId
     const selectedAnswers: Record<number, number> = {};
     for (const [key, value] of formData.entries()) {
       if (key.startsWith("question-")) {
@@ -965,7 +956,7 @@ function useAutoplay() {
     try {
       setEnabled(localStorage.getItem(AUTOPLAY_KEY) === "true");
     } catch {
-      /* silently fail */
+      /* Storage can be unavailable (private mode, blocked); autoplay stays off. */
     }
   }, []);
 
@@ -975,7 +966,7 @@ function useAutoplay() {
       try {
         localStorage.setItem(AUTOPLAY_KEY, String(next));
       } catch {
-        /* silently fail */
+        /* Storage can be unavailable; the toggle still works for this page. */
       }
       return next;
     });
@@ -1025,7 +1016,6 @@ export default function LessonViewer({ loaderData }: Route.ComponentProps) {
   const isCompleted =
     lessonStatus === LessonProgressStatus.Completed || justCompleted;
 
-  // Navigate to next lesson after marking complete
   useEffect(() => {
     if (justCompleted && nextLesson) {
       navigate(`/courses/${course.slug}/lessons/${nextLesson.id}`);
@@ -1075,7 +1065,6 @@ export default function LessonViewer({ loaderData }: Route.ComponentProps) {
 
   return (
     <div className="flex">
-      {/* Curriculum Sidebar */}
       <CurriculumSidebar
         course={course}
         curriculum={curriculum}
@@ -1085,7 +1074,6 @@ export default function LessonViewer({ loaderData }: Route.ComponentProps) {
       />
 
       <div className="flex-1 p-6 lg:p-8">
-        {/* Breadcrumb */}
         <nav className="mb-6 text-sm text-muted-foreground">
           <Link to="/courses" className="hover:text-foreground">
             Courses
@@ -1109,7 +1097,6 @@ export default function LessonViewer({ loaderData }: Route.ComponentProps) {
         </nav>
 
         <div className="mx-auto max-w-4xl">
-          {/* Lesson Title */}
           <h1 className="mb-2 text-3xl font-bold">{lesson.title}</h1>
           <div className="mb-6 flex items-center gap-3">
             {lesson.durationMinutes && (
@@ -1135,7 +1122,6 @@ export default function LessonViewer({ loaderData }: Route.ComponentProps) {
             )}
           </div>
 
-          {/* YouTube Video */}
           {lesson.videoUrl && (
             <YouTubePlayer
               videoUrl={lesson.videoUrl}
@@ -1152,7 +1138,6 @@ export default function LessonViewer({ loaderData }: Route.ComponentProps) {
 
           {canViewContent && currentUserId && <LessonNote note={note} />}
 
-          {/* Lesson Content */}
           {contentHtml && (
             <div
               className="prose prose-neutral dark:prose-invert mb-8 max-w-none"
@@ -1168,7 +1153,6 @@ export default function LessonViewer({ loaderData }: Route.ComponentProps) {
             </Card>
           )}
 
-          {/* Quiz Section */}
           {quiz && enrolled && currentUserId && (
             <QuizSection
               quiz={quiz}
@@ -1179,7 +1163,6 @@ export default function LessonViewer({ loaderData }: Route.ComponentProps) {
             />
           )}
 
-          {/* Mark Complete / Up Next */}
           {enrolled && currentUserId && (
             <div className="mb-8">
               {isCompleted ? (
@@ -1225,7 +1208,6 @@ export default function LessonViewer({ loaderData }: Route.ComponentProps) {
             </div>
           )}
 
-          {/* Questions & Discussion — confidential to people with access */}
           {canViewContent && (
             <CommentThread
               comments={comments}
@@ -1236,7 +1218,6 @@ export default function LessonViewer({ loaderData }: Route.ComponentProps) {
             />
           )}
 
-          {/* Prev/Next Navigation */}
           <div className="flex items-center justify-between border-t pt-6">
             {prevLesson ? (
               <Link
@@ -1371,13 +1352,11 @@ function CurriculumSidebar({
   lessonProgressMap: Record<number, string>;
   enrolled: boolean;
 }) {
-  // Find which module the current lesson belongs to
   const currentModuleId = curriculum.find((m) =>
     m.lessons.some((l) => l.id === currentLessonId)
   )?.id;
 
   const [expandedModules, setExpandedModules] = useState<Set<number>>(() => {
-    // Start with current module expanded
     const initial = new Set<number>();
     if (currentModuleId) initial.add(currentModuleId);
     return initial;
@@ -1545,7 +1524,6 @@ function QuizSection({
             <h2 className="text-xl font-semibold">{quiz.title}</h2>
           </div>
 
-          {/* Results summary */}
           <div
             className={`mb-6 rounded-lg p-4 ${quizResult.passed ? "bg-green-50 dark:bg-green-950" : "bg-red-50 dark:bg-red-950"}`}
           >
@@ -1570,7 +1548,6 @@ function QuizSection({
             </div>
           </div>
 
-          {/* Per-question results */}
           <div className="space-y-4">
             {quiz.questions.map((question, qIndex) => {
               const result = quizResult.questionResults.find(
@@ -1612,7 +1589,6 @@ function QuizSection({
             })}
           </div>
 
-          {/* Retake button */}
           {!quizResult.passed && (
             <div className="mt-6">
               <Button

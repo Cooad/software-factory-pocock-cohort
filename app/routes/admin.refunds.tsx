@@ -53,7 +53,6 @@ function getUserById(id: number) {
   return db.select().from(users).where(eq(users.id, id)).get();
 }
 
-/** Only a Platform Admin decides Refund Requests. */
 async function requirePlatformAdmin(request: Request) {
   const currentUserId = await getCurrentUserId(request);
 

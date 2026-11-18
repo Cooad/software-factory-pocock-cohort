@@ -8,10 +8,6 @@ type ParseFailure = {
 };
 type ParseResult<T> = ParseSuccess<T> | ParseFailure;
 
-/**
- * Converts FormData to a plain object, validates with a Zod schema,
- * and returns either the parsed data or a field-error map (first error per field).
- */
 export function parseFormData<T extends z.ZodType>(
   formData: FormData,
   schema: T
@@ -34,10 +30,7 @@ export function parseFormData<T extends z.ZodType>(
   return { success: false, errors };
 }
 
-/**
- * Validates route params with a Zod schema.
- * Throws a 400 response on failure (params are never user-correctable form errors).
- */
+/** Throws rather than returning errors: params are never user-correctable. */
 export function parseParams<T extends z.ZodType>(
   params: Record<string, string | undefined>,
   schema: T
@@ -51,10 +44,6 @@ export function parseParams<T extends z.ZodType>(
   throw data("Invalid parameters", { status: 400 });
 }
 
-/**
- * Parses a JSON request body with a Zod schema.
- * Returns either the parsed data or a field-error map (first error per field).
- */
 export async function parseJsonBody<T extends z.ZodType>(
   request: Request,
   schema: T

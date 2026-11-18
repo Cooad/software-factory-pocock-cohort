@@ -4,9 +4,8 @@ import { getCurrentUserId } from "~/lib/session";
 import { defaultNotifications } from "~/lib/notifications.server";
 
 /**
- * A fresh signed user token for the signed-in person's Notification Feed. The
- * browser asks for one shortly before its current token expires, so a tab
- * left open past the token's lifetime keeps its live feed.
+ * The browser asks for a fresh token shortly before its current one expires,
+ * so a tab left open past the token's lifetime keeps its live feed.
  */
 export async function loader({ request }: Route.LoaderArgs) {
   const currentUserId = await getCurrentUserId(request);

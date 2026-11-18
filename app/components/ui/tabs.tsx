@@ -63,14 +63,7 @@ function TabsContent({
   );
 }
 
-/**
- * A tabs wrapper that prevents layout shift by keeping all tab panels
- * mounted and using CSS grid to overlay them. The tallest panel
- * determines the container height.
- *
- * Usage: wrap TabsContent elements in <TabsContentNoShift> instead of
- * rendering them as direct children of <Tabs>.
- */
+// Keeps every panel mounted so switching tabs never shifts the layout.
 function TabsContentNoShift({
   children,
   className,

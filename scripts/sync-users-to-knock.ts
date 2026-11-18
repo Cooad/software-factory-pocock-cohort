@@ -1,6 +1,4 @@
-// One-off backfill: syncs every existing Cadence user to Knock (name, email,
-// avatar) and writes the default preference set for anyone who has none yet.
-// Safe to re-run: existing preference sets are left alone.
+// One-off backfill. Safe to re-run: existing preference sets are left alone.
 //
 //   npm run knock:sync-users              # every user in data.db
 //   npm run knock:sync-users -- --user 12 # just user 12

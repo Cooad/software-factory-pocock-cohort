@@ -334,7 +334,7 @@ export async function action({ params, request }: Route.ActionArgs) {
     throw redirect(`/courses/${slug}/welcome`);
   }
 
-  // Team purchase — user does NOT get enrolled themselves
+  // A Team Licence grants Seats, not an Enrollment, so the buyer is not enrolled.
   const { quantity } = parsed.data;
   const totalPrice = pppPrice * quantity;
   createTeamPurchase(currentUserId, course.id, totalPrice, country, quantity);
@@ -372,7 +372,6 @@ export default function PurchaseConfirmation({
 
   return (
     <div className="mx-auto max-w-3xl p-6 lg:p-8">
-      {/* Back link */}
       <Link
         to={`/courses/${course.slug}`}
         className="mb-6 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
@@ -389,7 +388,6 @@ export default function PurchaseConfirmation({
       <Card>
         <CardContent className="p-6">
           <div className="flex flex-col gap-6 sm:flex-row">
-            {/* Cover image */}
             <div className="w-full shrink-0 overflow-hidden rounded-lg sm:w-48">
               <CourseImage
                 src={course.coverImageUrl}
@@ -398,7 +396,6 @@ export default function PurchaseConfirmation({
               />
             </div>
 
-            {/* Course info */}
             <div className="flex-1">
               <h2 className="mb-1 text-xl font-semibold">{course.title}</h2>
               <p className="mb-4 text-sm text-muted-foreground">
@@ -416,7 +413,6 @@ export default function PurchaseConfirmation({
             </div>
           </div>
 
-          {/* Stats */}
           <div className="mt-6 flex flex-wrap gap-6 border-t pt-6 text-sm text-muted-foreground">
             <span className="flex items-center gap-2">
               <BookOpen className="size-4" />
@@ -433,7 +429,6 @@ export default function PurchaseConfirmation({
             </span>
           </div>
 
-          {/* Purchase tabs */}
           <div className="mt-6 border-t pt-6">
             {isDiscounted && countryName && (
               <div className="mb-4 rounded-lg bg-green-50 p-3 dark:bg-green-900/20">
@@ -456,7 +451,6 @@ export default function PurchaseConfirmation({
               )}
 
               <TabsContentNoShift>
-                {/* Buy for Myself */}
                 {!isEnrolled && (
                   <TabsContent value="self" forceMount>
                     <div className="flex items-center justify-between">
@@ -508,10 +502,8 @@ export default function PurchaseConfirmation({
                   </TabsContent>
                 )}
 
-                {/* Buy for Your Team */}
                 <TabsContent value="team" forceMount>
                   <div className="space-y-6">
-                    {/* Quantity selector */}
                     <div className="flex items-center gap-4">
                       <span className="text-sm font-medium">Seats</span>
                       <div className="flex items-center gap-2">
@@ -538,7 +530,6 @@ export default function PurchaseConfirmation({
                       </div>
                     </div>
 
-                    {/* Price breakdown */}
                     <div>
                       <div className="text-sm text-muted-foreground">
                         {formatPrice(pppPrice)} &times; {quantity}{" "}

@@ -16,15 +16,12 @@ import type {
   Notifications,
 } from "~/lib/notifications.server";
 
-// ─── Knock adapter for the Notifications port ───
 // The only server code that imports the Knock SDK or knows Knock's keys.
-// Each Notification kind is one Knock workflow in its preference category,
-// pushed and committed by scripts/push-knock-workflows.ts.
+// scripts/push-knock-workflows.ts pushes these workflows to Knock.
 
 /**
- * The Knock workflow for each Notification kind, and the Notification
- * category it belongs to. Each workflow is pushed in that category's
- * Knock key (`CATEGORY_KEYS`), which is what lets a feed switch silence it.
+ * Each workflow is pushed in its category's Knock key (`CATEGORY_KEYS`),
+ * which is what lets a feed switch silence it.
  */
 const WORKFLOWS: Record<
   NotificationKind,
@@ -58,7 +55,6 @@ const WORKFLOWS: Record<
   },
 };
 
-/** Knock preference category key per Cadence Notification category. */
 const CATEGORY_KEYS: Record<NotificationCategory, string> = {
   refundRequestUpdates: "refund-request-updates",
   seatClaims: "seat-claims",
@@ -68,7 +64,6 @@ const CATEGORY_KEYS: Record<NotificationCategory, string> = {
   discussionReplies: "discussion-replies",
 };
 
-/** Each Knock workflow key with its category key, for pushing workflows. */
 export const KNOCK_WORKFLOWS = (
   Object.entries(WORKFLOWS) as [
     NotificationKind,
@@ -82,7 +77,6 @@ export const KNOCK_WORKFLOWS = (
 
 type KnockChannelType = keyof PreferenceSetChannelTypes;
 
-/** Knock channel type per Cadence channel. */
 const CHANNEL_TYPES: Record<NotificationChannel, KnockChannelType> = {
   feed: "in_app_feed",
 };
@@ -100,7 +94,6 @@ const ALL_KNOCK_CHANNEL_TYPES: KnockChannelType[] = [
   "sms",
 ];
 
-/** Cadence keeps each user's preferences in Knock's `default` set. */
 const PREFERENCE_SET = "default";
 
 const USER_TOKEN_LIFETIME_SECONDS = 60 * 60;
@@ -115,7 +108,6 @@ export type KnockConfig = {
 export function knockNotifications(config: KnockConfig): Notifications {
   const knock = new Knock({ apiKey: config.secretKey });
 
-  /** The user's raw Knock set, or null when Knock has never seen them. */
   async function getKnockPreferenceSet(
     userId: number
   ): Promise<KnockPreferenceSet | null> {
@@ -194,7 +186,6 @@ export function knockNotifications(config: KnockConfig): Notifications {
   };
 }
 
-/** The parts of a Knock preference set Cadence reads and writes back. */
 type KnockPreferenceSet = Pick<
   PreferenceSet,
   | "categories"
@@ -209,8 +200,8 @@ type KnockCategorySetting = NonNullable<
 >[string];
 
 /**
- * Cadence's view of a Knock set: each Cadence category's feed switch. Null
- * when Knock holds no set or one with no categories, so defaults get written.
+ * Null when Knock holds no set or one with no categories, so defaults get
+ * written.
  */
 export function fromKnockPreferenceSet(
   set: KnockPreferenceSet | null
@@ -232,11 +223,6 @@ export function fromKnockPreferenceSet(
   return preferences;
 }
 
-/**
- * The Knock set to write: `stored` with only the given category × channel
- * switches changed. Categories, channels and workflows Cadence doesn't know
- * about are kept as they are.
- */
 export function mergeIntoKnockPreferenceSet(
   stored: KnockPreferenceSet | null,
   preferences: NotificationPreferences
@@ -266,7 +252,6 @@ export function mergeIntoKnockPreferenceSet(
   };
 }
 
-/** A category setting as an object, a single on/off spelled out per channel. */
 function spellOutChannels(setting: KnockCategorySetting | undefined) {
   if (setting === undefined) return {};
   if (typeof setting !== "boolean") return setting;

@@ -222,7 +222,6 @@ export async function loader({ params, request }: Route.LoaderArgs) {
     });
   }
 
-  // Get all enrolled students
   const enrolledStudents: {
     enrollmentId: number | null;
     userId: number;
@@ -236,14 +235,12 @@ export async function loader({ params, request }: Route.LoaderArgs) {
     )
   );
 
-  // Get all lessons with quizzes for this course
   const courseModules = db
     .select({ id: modules.id })
     .from(modules)
     .where(eq(modules.courseId, courseId))
     .all();
 
-  // Get all lessons across all modules
   const allCourseLessons: { id: number; title: string }[] = [];
   for (const mod of courseModules) {
     const modLessons = db
@@ -254,7 +251,6 @@ export async function loader({ params, request }: Route.LoaderArgs) {
     allCourseLessons.push(...modLessons);
   }
 
-  // Find which lessons have quizzes
   const lessonQuizzes: {
     lessonId: number;
     lessonTitle: string;
@@ -273,12 +269,10 @@ export async function loader({ params, request }: Route.LoaderArgs) {
     }
   }
 
-  // Build student data with progress and quiz scores
   const students = enrolledStudents.map((enrollment) => {
     const studentUser = getUserById(enrollment.userId);
     const progress = calculateProgress(enrollment.userId, courseId, false);
 
-    // Get best quiz attempt for each quiz in this course
     const quizScores = lessonQuizzes.map((lq) => {
       const bestAttempt = getBestAttempt(enrollment.userId, lq.quizId);
       return {
@@ -348,7 +342,6 @@ export default function InstructorStudentRoster({
 
   return (
     <div className="mx-auto max-w-7xl p-6 lg:p-8">
-      {/* Breadcrumb */}
       <nav className="mb-6 text-sm text-muted-foreground">
         <Link to="/instructor" className="hover:text-foreground">
           My Courses

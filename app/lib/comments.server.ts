@@ -10,14 +10,6 @@ import {
   type Notifications,
 } from "~/lib/notifications.server";
 
-// ─── Comments ───
-// Posting, editing and soft-deleting comments on a lesson: Discussion Questions and
-// Discussion Replies. See GLOSSARY.md for the language.
-//
-// Every function takes the database first, so tests can hand in an in-memory
-// one, and the Notifications port last, so tests can hand in a fake. Uses
-// positional parameters (project convention).
-
 export type Db = BetterSQLite3Database<typeof schema>;
 
 type Comment = typeof comments.$inferSelect;
@@ -39,11 +31,7 @@ export type CommentFailure = { ok: false; error: string };
 export type CreateCommentResult =
   { ok: true; comment: Comment } | CommentFailure;
 
-/**
- * Posts a Discussion Question (`parentId` null) or a Discussion Reply. A reply
- * to someone else's question sends its author the Discussion Reply
- * Notification; a failure to send it is logged and never fails the post.
- */
+/** A failure to send a Notification is logged and never fails the post. */
 export async function createComment(
   db: Db,
   authorId: number,
@@ -140,7 +128,7 @@ async function notifyQuestionAuthor(
 
 /**
  * A top-level comment by anyone but the course's Instructor is a Discussion
- * Question: the Instructor gets the Discussion Question Notification.
+ * Question (GLOSSARY.md).
  */
 async function notifyInstructor(
   db: Db,
@@ -172,7 +160,6 @@ async function notifyInstructor(
   );
 }
 
-/** The lesson a comment is on, its course's Instructor, and the comment's link. */
 function getLessonOf(db: Db, comment: Comment) {
   const lesson = db
     .select({
@@ -194,7 +181,7 @@ function getLessonOf(db: Db, comment: Comment) {
 
 const SNIPPET_LENGTH = 140;
 
-/** One line of a comment body, short enough for a Notification Feed row. */
+/** Short enough for a Notification Feed row. */
 function snippetOf(body: string) {
   const line = body.replace(/\s+/g, " ").trim();
   return line.length > SNIPPET_LENGTH
@@ -206,11 +193,9 @@ export type DeleteCommentResult =
   { ok: true; comment: Comment } | CommentFailure;
 
 /**
- * Soft-deletes a comment and archives the Notifications it caused (the
- * Instructor's Discussion Question Notification, or the question author's
- * Discussion Reply Notification). A deleted Discussion Question keeps its
- * Discussion Replies readable, and their Notifications in place. A failure to
- * archive is logged and never fails the delete.
+ * A deleted Discussion Question keeps its Discussion Replies readable, and
+ * their Notifications in place. A failure to archive is logged and never fails
+ * the delete.
  */
 export async function deleteComment(
   db: Db,
@@ -246,8 +231,8 @@ export async function deleteComment(
 export type EditCommentResult = { ok: true; comment: Comment } | CommentFailure;
 
 /**
- * Changes the body of the author's own comment. Notifications are a snapshot
- * of when they were sent, so an edit changes none of them.
+ * Notifications are a snapshot of when they were sent, so an edit changes none
+ * of them.
  */
 export function editComment(
   db: Db,

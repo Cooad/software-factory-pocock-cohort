@@ -88,8 +88,6 @@ const quizActionSchema = z.discriminatedUnion("intent", [
   }),
 ]);
 
-// ─── Types for wizard state ───
-
 interface WizardOption {
   id: string;
   text: string;
@@ -199,7 +197,7 @@ function updateQuiz(
 }
 
 function deleteQuiz(id: number) {
-  // Cascade: delete answers -> attempts -> options -> questions -> quiz
+  // These foreign keys don't cascade, so children are deleted before parents.
   const questions = getQuestionsByQuiz(id);
   for (const question of questions) {
     db.delete(quizOptions).where(eq(quizOptions.questionId, question.id)).run();
@@ -263,8 +261,6 @@ function createOption(
     .get();
 }
 
-// ─── Meta ───
-
 export function meta({ loaderData }: Route.MetaArgs) {
   const lessonTitle = loaderData?.lesson?.title ?? "Lesson";
   const hasQuiz = !!loaderData?.existingQuiz;
@@ -274,8 +270,6 @@ export function meta({ loaderData }: Route.MetaArgs) {
     },
   ];
 }
-
-// ─── Loader ───
 
 export async function loader({ params, request }: Route.LoaderArgs) {
   const currentUserId = await getCurrentUserId(request);
@@ -323,7 +317,6 @@ export async function loader({ params, request }: Route.LoaderArgs) {
     throw data("Lesson not found in this course.", { status: 404 });
   }
 
-  // Load existing quiz if present
   const existingQuizBasic = getQuizByLessonId(lessonId);
   const existingQuiz = existingQuizBasic
     ? getQuizWithQuestions(existingQuizBasic.id)
@@ -331,8 +324,6 @@ export async function loader({ params, request }: Route.LoaderArgs) {
 
   return { course, lesson, module: mod, existingQuiz };
 }
-
-// ─── Action ───
 
 export async function action({ params, request }: Route.ActionArgs) {
   const currentUserId = await getCurrentUserId(request);
@@ -396,20 +387,17 @@ export async function action({ params, request }: Route.ActionArgs) {
       return data({ error: "Invalid quiz data." }, { status: 400 });
     }
 
-    // Delete existing quiz if present
     const existingQuiz = getQuizByLessonId(lessonId);
     if (existingQuiz) {
       deleteQuiz(existingQuiz.id);
     }
 
-    // Create the quiz
     const quiz = createQuiz(
       lessonId,
       wizardData.title.trim(),
       wizardData.passingScore / 100
     );
 
-    // Create questions and options
     for (let qi = 0; qi < wizardData.questions.length; qi++) {
       const q = wizardData.questions[qi];
       const question = createQuestion(quiz.id, q.text.trim(), q.type, qi + 1);
@@ -432,8 +420,6 @@ export async function action({ params, request }: Route.ActionArgs) {
 
   throw data("Invalid action.", { status: 400 });
 }
-
-// ─── Step Indicators ───
 
 const STEPS = [
   { label: "Settings", number: 1 },
@@ -478,8 +464,6 @@ function StepIndicator({
   );
 }
 
-// ─── Component ───
-
 export default function QuizBuilderWizard({
   loaderData,
 }: Route.ComponentProps) {
@@ -488,7 +472,6 @@ export default function QuizBuilderWizard({
   const navigate = useNavigate();
   const [step, setStep] = useState(1);
 
-  // Initialize wizard state from existing quiz or defaults
   const [wizard, setWizard] = useState<WizardState>(() => {
     if (existingQuiz) {
       return {
@@ -515,7 +498,6 @@ export default function QuizBuilderWizard({
 
   const isEditing = !!existingQuiz;
 
-  // Toast on success
   const fetcherData = fetcher.data as
     { success?: boolean; deleted?: boolean; error?: string } | undefined;
 
@@ -529,8 +511,7 @@ export default function QuizBuilderWizard({
     }
   }
 
-  // ─── Step 1: Settings ───
-  function renderStep1() {
+  function renderSettingsStep() {
     return (
       <Card>
         <CardHeader>
@@ -573,7 +554,6 @@ export default function QuizBuilderWizard({
     );
   }
 
-  // ─── Step 2: Questions ───
   function addQuestion() {
     setWizard((prev) => ({
       ...prev,
@@ -608,7 +588,6 @@ export default function QuizBuilderWizard({
       questions: prev.questions.map((q) => {
         if (q.id !== questionId) return q;
         const updated = { ...q, ...updates };
-        // When switching to TrueFalse, reset options to True/False
         if (
           updates.type === QuestionType.TrueFalse &&
           q.type !== QuestionType.TrueFalse
@@ -618,7 +597,6 @@ export default function QuizBuilderWizard({
             { id: generateId(), text: "False", isCorrect: false },
           ];
         }
-        // When switching to MultipleChoice from TrueFalse, add blank options
         if (
           updates.type === QuestionType.MultipleChoice &&
           q.type !== QuestionType.MultipleChoice
@@ -647,7 +625,7 @@ export default function QuizBuilderWizard({
     });
   }
 
-  function renderStep2() {
+  function renderQuestionsStep() {
     return (
       <div className="space-y-4">
         <Card>
@@ -761,7 +739,6 @@ export default function QuizBuilderWizard({
     );
   }
 
-  // ─── Step 3: Answers ───
   function addOption(questionId: string) {
     setWizard((prev) => ({
       ...prev,
@@ -826,7 +803,7 @@ export default function QuizBuilderWizard({
     }));
   }
 
-  function renderStep3() {
+  function renderAnswersStep() {
     return (
       <div className="space-y-4">
         <Card>
@@ -921,8 +898,7 @@ export default function QuizBuilderWizard({
     );
   }
 
-  // ─── Step 4: Review ───
-  function renderStep4() {
+  function renderReviewStep() {
     const validationErrors: string[] = [];
     if (!wizard.title.trim()) validationErrors.push("Quiz title is required.");
     if (wizard.questions.length === 0)
@@ -960,7 +936,6 @@ export default function QuizBuilderWizard({
             </p>
           </CardHeader>
           <CardContent className="space-y-4">
-            {/* Quiz summary */}
             <div className="rounded-lg bg-muted/50 p-4">
               <div className="space-y-1 text-sm">
                 <div>
@@ -978,7 +953,6 @@ export default function QuizBuilderWizard({
               </div>
             </div>
 
-            {/* Questions review */}
             {wizard.questions.map((q, idx) => (
               <div key={q.id} className="rounded-lg border p-4">
                 <div className="mb-2 flex items-center gap-2">
@@ -1018,7 +992,6 @@ export default function QuizBuilderWizard({
               </div>
             ))}
 
-            {/* Validation errors */}
             {validationErrors.length > 0 && (
               <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4">
                 <p className="mb-2 text-sm font-medium text-destructive">
@@ -1032,7 +1005,6 @@ export default function QuizBuilderWizard({
               </div>
             )}
 
-            {/* Save button */}
             <div className="flex items-center gap-3">
               <Button
                 disabled={!isValid || fetcher.state !== "idle"}
@@ -1066,7 +1038,6 @@ export default function QuizBuilderWizard({
     );
   }
 
-  // ─── Navigation ───
   function canGoNext() {
     if (step === 1) return wizard.title.trim().length > 0;
     if (step === 2) return wizard.questions.length > 0;
@@ -1076,7 +1047,6 @@ export default function QuizBuilderWizard({
 
   return (
     <div className="mx-auto max-w-7xl p-6 lg:p-8">
-      {/* Breadcrumb */}
       <nav className="mb-6 text-sm text-muted-foreground">
         <Link to="/instructor" className="hover:text-foreground">
           My Courses
@@ -1135,16 +1105,13 @@ export default function QuizBuilderWizard({
         )}
       </div>
 
-      {/* Step indicator */}
       <StepIndicator currentStep={step} onStepClick={setStep} />
 
-      {/* Step content */}
-      {step === 1 && renderStep1()}
-      {step === 2 && renderStep2()}
-      {step === 3 && renderStep3()}
-      {step === 4 && renderStep4()}
+      {step === 1 && renderSettingsStep()}
+      {step === 2 && renderQuestionsStep()}
+      {step === 3 && renderAnswersStep()}
+      {step === 4 && renderReviewStep()}
 
-      {/* Step navigation */}
       <div className="mt-6 flex items-center justify-between">
         <Button
           variant="outline"

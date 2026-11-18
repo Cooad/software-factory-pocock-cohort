@@ -30,18 +30,10 @@ import {
   type NotificationFeed,
 } from "~/lib/notification-feed";
 
-// ─── Notification Feed ───
-// The bell in the sidebar header and its popover (variant A2 from
-// prototype/notification-feed). Everything here talks to the NotificationFeed
-// port, never to Knock.
+// Everything here talks to the NotificationFeed port, never to Knock.
 
 const FeedContext = createContext<NotificationFeed>(emptyNotificationFeed());
 
-/**
- * Opens the signed-in person's Notification Feed and keeps it live. When the
- * person changes (switching user in the DevUI panel) the old feed and its
- * socket are torn down and a new one opens with the new person's token.
- */
 export function NotificationFeedProvider({
   credentials,
   children,
@@ -87,10 +79,8 @@ export function NotificationFeedProvider({
 
 const feedTokenSchema = z.object({ userId: z.string(), userToken: z.string() });
 
-/**
- * A fresh signed user token for `userId`, or null when the session now holds
- * someone else (or no one), so the old feed is left to lapse.
- */
+// Null when the session now holds someone else (or no one), so the old feed
+// lapses instead of picking up another person's token.
 async function fetchFeedToken(userId: string): Promise<string | null> {
   const response = await fetch("/api/notification-feed-token");
   if (!response.ok) return null;
@@ -151,7 +141,6 @@ export function NotificationBell() {
   );
 }
 
-/** The popover header's gear: opens the Notifications card on /settings. */
 function NotificationSettingsLink({ onClick }: { onClick: () => void }) {
   return (
     <Link
@@ -183,7 +172,6 @@ function NotificationPopover({
       describeNotification(notification).url
     );
     void feed.markRead(markRead);
-    // A row with nowhere to go only marks itself read; the popover stays.
     if (navigateTo === null) return;
     close();
     navigate(navigateTo);
@@ -236,10 +224,6 @@ function NotificationPopover({
   );
 }
 
-/**
- * Sits under the last row. While it's in view and older Notifications exist,
- * it keeps loading the next page, so scrolling reaches the whole history.
- */
 function LoadMoreSentinel({
   feed,
   state,
@@ -344,11 +328,6 @@ function NotificationRow({
   );
 }
 
-/**
- * Cadence's copy for each kind of Notification, written from its data. `url`
- * is the click target; leave it out (or undefined) for a row with nowhere to
- * go, and clicking it only marks it read.
- */
 function describeNotification(notification: FeedNotification): {
   title: string;
   body: string;

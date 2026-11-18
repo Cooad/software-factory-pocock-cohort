@@ -16,10 +16,6 @@ import {
   type Notifications,
 } from "~/lib/notifications.server";
 
-// ─── User sync and Notification preferences ───
-// Keeps Cadence's users in sync with the Notifications port, and reads and
-// changes which Notification categories reach each person's feed.
-
 function defaultPreferences(): NotificationPreferences {
   const set: NotificationPreferences = {};
   for (const category of NOTIFICATION_CATEGORIES) {
@@ -28,15 +24,13 @@ function defaultPreferences(): NotificationPreferences {
   return set;
 }
 
-/** Whether the stored set holds no Cadence category at all. */
 function hasNoPreferences(stored: NotificationPreferences | null) {
   return !stored || Object.keys(stored).length === 0;
 }
 
 /**
- * Sends the person's name, email and avatar, and writes the default
- * preferences if they have none yet. Never throws: a failure is logged, so
- * signup, settings and seeding still succeed.
+ * Never throws: a failure is logged, so signup, settings and seeding still
+ * succeed.
  */
 export async function syncUser(
   notifications: Notifications,
@@ -55,11 +49,7 @@ export async function syncUser(
   );
 }
 
-/**
- * Syncs every user in the database, one at a time, for the seed and the
- * one-off backfill. Returns how many users it went through. A failure for one
- * user is logged and the rest still sync.
- */
+/** A failure for one user is logged and the rest still sync. */
 export async function syncAllUsers(
   db: Db,
   notifications: Notifications
@@ -71,7 +61,6 @@ export async function syncAllUsers(
   return everyone.length;
 }
 
-/** Each category's feed switch for the person, defaults filling the gaps. */
 export async function getFeedPreferences(
   notifications: Notifications,
   userId: number
@@ -86,9 +75,8 @@ export async function getFeedPreferences(
 }
 
 /**
- * Turns one category's feed switch on or off, leaving the rest of the
- * person's set alone. A person with no set yet gets the defaults written with
- * the change. Throws when the port fails, so the caller can tell the person.
+ * A person with no set yet gets the defaults written with the change. Throws
+ * when the port fails, so the caller can tell the person.
  */
 export async function setFeedPreference(
   notifications: Notifications,
@@ -106,12 +94,7 @@ export async function setFeedPreference(
 
 type Db = BetterSQLite3Database<typeof schema>;
 
-/**
- * The categories whose switch the person sees on /settings, in display
- * order. It depends on what they are or have: a Purchase, a Team Licence,
- * a course they own, being a Platform Admin. Hidden categories keep their
- * default.
- */
+/** In display order. Hidden categories keep their default. */
 export function visibleNotificationCategories(
   db: Db,
   userId: number

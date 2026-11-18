@@ -76,7 +76,6 @@ export async function loader({ params, request }: Route.LoaderArgs) {
         ? SEAT_REFUNDED
         : null;
 
-  // Check country mismatch upfront so we can show a clear message
   let countryMismatch = false;
   if (!alreadyRedeemed && !alreadyEnrolled) {
     const userCountry = await resolveCountry(request);
@@ -160,7 +159,6 @@ export default function Redeem({
     }
   }, [fetcher.data, actionData]);
 
-  // Determine which state to show
   const canRedeem =
     !alreadyRedeemed && !alreadyEnrolled && !countryMismatch && !unavailableReason;
 
