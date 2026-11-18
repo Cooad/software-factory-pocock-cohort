@@ -387,7 +387,7 @@ describe("deleting a comment", () => {
     });
   });
 
-  it("refuses anyone else who is not staff", async () => {
+  it("refuses anyone else who can't Manage the course", async () => {
     const question = await post(null);
     const otherStudent = db
       .insert(schema.users)
@@ -411,7 +411,7 @@ describe("deleting a comment", () => {
     ).toEqual({ ok: false, error: "You can only delete your own comments" });
   });
 
-  it("lets staff delete anyone's comment", async () => {
+  it("lets someone who can Manage the course delete anyone's comment", async () => {
     const question = await post(null);
 
     expect(

@@ -3,7 +3,11 @@ import { Link, data, isRouteErrorResponse, useFetcher } from "react-router";
 import { toast } from "sonner";
 import { z } from "zod";
 import type { Route } from "./+types/instructor.questions";
-import { requireInstructorOrAdmin, requireStaff } from "~/lib/access.server";
+import {
+  forbidden,
+  requireInstructorOrPlatformAdmin,
+  requireManagePermission,
+} from "~/modules/course-access/request.server";
 import { renderComment } from "~/lib/comment-markdown.server";
 import { createComment } from "~/lib/comments.server";
 import { defaultNotifications } from "~/lib/notifications.server";
@@ -132,10 +136,12 @@ export function meta() {
 }
 
 export async function loader({ request }: Route.LoaderArgs) {
-  const { userId, isAdmin } = await requireInstructorOrAdmin(request);
+  const { userId, isPlatformAdmin } =
+    await requireInstructorOrPlatformAdmin(request);
 
-  // Admins span every course; instructors see only the courses they own.
-  const questions = getUnansweredQuestions(isAdmin ? null : userId);
+  // Platform Admins span every course; Instructors see only the courses they
+  // own.
+  const questions = getUnansweredQuestions(isPlatformAdmin ? null : userId);
 
   const rendered = await Promise.all(
     questions.map(async (question) => ({
@@ -144,10 +150,14 @@ export async function loader({ request }: Route.LoaderArgs) {
     }))
   );
 
-  return { questions: rendered, isAdmin };
+  return { questions: rendered, isPlatformAdmin };
 }
 
 export async function action({ request }: Route.ActionArgs) {
+  // Refuse anyone who can't Manage any course before reading the form or
+  // looking anything up, so nobody can probe which comments exist.
+  await requireInstructorOrPlatformAdmin(request);
+
   const formData = await request.formData();
   const parsed = parseFormData(formData, replySchema);
 
@@ -155,22 +165,17 @@ export async function action({ request }: Route.ActionArgs) {
     return { ok: false, error: "Enter a reply before posting." };
   }
 
+  // A missing question gets the same refusal as one on a course the viewer
+  // can't Manage.
   const question = getCommentById(parsed.data.commentId);
-  if (!question) {
-    throw data("Question not found", { status: 404 });
-  }
+  const course = question ? getCourseForLesson(question.lessonId) : undefined;
+  if (!question || !course) forbidden();
 
-  const course = getCourseForLesson(question.lessonId);
-  if (!course) {
-    throw data("Course not found", { status: 404 });
-  }
-
-  // Answering as the course's voice — so it must be the course's own
-  // instructor, or an admin.
-  const { userId: authorId } = await requireStaff(request, course.courseId);
-  if (!authorId) {
-    throw data("Select a user from the DevUI panel.", { status: 401 });
-  }
+  // Answering as the course's voice — so the viewer must Manage the course.
+  const { userId: authorId } = await requireManagePermission(
+    request,
+    course.courseId
+  );
 
   const created = await createComment(
     db,
@@ -306,17 +311,17 @@ function QuestionCard({ question }: { question: Question }) {
 export default function InstructorQuestions({
   loaderData,
 }: Route.ComponentProps) {
-  const { questions, isAdmin } = loaderData;
+  const { questions, isPlatformAdmin } = loaderData;
 
   return (
     <div className="mx-auto max-w-4xl p-6 lg:p-8">
       <nav className="mb-6 text-sm text-muted-foreground">
         {/* /instructor is instructor-only, so admins go back to their own list. */}
         <Link
-          to={isAdmin ? "/admin/courses" : "/instructor"}
+          to={isPlatformAdmin ? "/admin/courses" : "/instructor"}
           className="hover:text-foreground"
         >
-          {isAdmin ? "Manage Courses" : "My Courses"}
+          {isPlatformAdmin ? "Manage Courses" : "My Courses"}
         </Link>
         <span className="mx-2">/</span>
         <span className="text-foreground">Questions</span>
@@ -325,7 +330,7 @@ export default function InstructorQuestions({
       <div className="mb-6">
         <h1 className="text-3xl font-bold">Unanswered Questions</h1>
         <p className="mt-1 text-muted-foreground">
-          {isAdmin
+          {isPlatformAdmin
             ? "Questions across every course that no instructor or admin has replied to yet."
             : "Questions on your courses that you haven't replied to yet."}{" "}
           Replying here marks them answered.

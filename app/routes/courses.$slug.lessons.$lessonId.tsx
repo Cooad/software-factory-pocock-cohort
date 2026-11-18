@@ -2,8 +2,12 @@ import { useState, useEffect, useCallback } from "react";
 import { Link, useFetcher, useNavigate } from "react-router";
 import { toast } from "sonner";
 import type { Route } from "./+types/courses.$slug.lessons.$lessonId";
-import { getCurrentUserId } from "~/lib/session";
-import { getAccess, requireContentAccess } from "~/lib/access.server";
+import {
+  getCourseAccess,
+  requireContentAccess,
+  requireUserId,
+} from "~/modules/course-access/request.server";
+import { isEnrolled } from "~/lib/enrollments.server";
 import { renderComment } from "~/lib/comment-markdown.server";
 import { markdown, type Markdown } from "~/lib/text";
 import {
@@ -66,7 +70,7 @@ import { renderMarkdown } from "~/lib/markdown.server";
 import { YouTubePlayer } from "~/components/youtube-player";
 import { data, isRouteErrorResponse } from "react-router";
 import { z } from "zod";
-import { COUNTRIES } from "~/lib/ppp";
+import { countryName } from "~/lib/ppp";
 import { parseFormData, parseParams } from "~/lib/validation";
 
 const lessonParamsSchema = z.object({
@@ -669,9 +673,13 @@ export async function loader({ params, request }: Route.LoaderArgs) {
     throw data("Lesson not found in this course", { status: 404 });
   }
 
-  const access = await getAccess(request, course.id);
-  const currentUserId = access.userId;
-  const enrolled = access.enrolled;
+  const { viewer, decision, canManage } = await getCourseAccess(
+    request,
+    course.id
+  );
+  const currentUserId = decision.kind === "signed-out" ? null : viewer.userId;
+  const enrolled =
+    currentUserId !== null && isEnrolled(db, currentUserId, course.id);
   let lessonStatus: string | null = null;
   let lastWatchPosition = 0;
   let watchProgress = 0;
@@ -708,10 +716,10 @@ export async function loader({ params, request }: Route.LoaderArgs) {
     }
   }
 
-  // PPP Access Guard — resolved by getAccess, which treats a blocked user as
-  // having no access to the course's content at all.
-  const { pppBlocked, pppBlockedCountry, pppPurchaseCountry, canViewContent } =
-    access;
+  // A Region-Locked Student has no Course Access, so sees none of the
+  // course's content.
+  const canViewContent = decision.kind === "allowed";
+  const regionLock = decision.kind === "region-locked" ? decision : null;
 
   // Comments are confidential to the course: only people who can read the
   // lesson can read the discussion on it.
@@ -818,12 +826,15 @@ export async function loader({ params, request }: Route.LoaderArgs) {
     lastWatchPosition,
     watchProgress,
     lessonProgressMap,
-    pppBlocked,
-    pppBlockedCountry,
-    pppPurchaseCountry,
+    regionLock: regionLock
+      ? {
+          purchaseCountryName: countryName(regionLock.purchaseCountry),
+          currentCountryName: countryName(regionLock.currentCountry),
+        }
+      : null,
     comments,
     canViewContent,
-    canModerate: access.isStaff,
+    canManage,
     instructorName: instructor?.name ?? "your instructor",
     bookmarked,
     note: note ? { body: note.body, updatedAt: note.updatedAt } : null,
@@ -838,10 +849,7 @@ export async function action({ params, request }: Route.ActionArgs) {
     throw data("Course not found", { status: 404 });
   }
 
-  const currentUserId = await getCurrentUserId(request);
-  if (!currentUserId) {
-    throw data("You must be logged in", { status: 401 });
-  }
+  const currentUserId = await requireUserId(request);
 
   const formData = await request.formData();
   const intent = formData.get("intent");
@@ -853,7 +861,7 @@ export async function action({ params, request }: Route.ActionArgs) {
     intent === "edit-comment" ||
     intent === "delete-comment"
   ) {
-    const access = await requireContentAccess(request, course.id);
+    const { canManage } = await requireContentAccess(request, course.id);
 
     try {
       if (intent === "create-comment") {
@@ -908,7 +916,7 @@ export async function action({ params, request }: Route.ActionArgs) {
         db,
         parsed.data.commentId,
         currentUserId,
-        access.isStaff,
+        canManage,
         new Date(),
         await defaultNotifications()
       );
@@ -931,7 +939,12 @@ export async function action({ params, request }: Route.ActionArgs) {
     requireLessonInCourse(lessonId, course.id);
 
     if (intent === "toggle-bookmark") {
-      const bookmarked = toggleBookmark(db, currentUserId, lessonId, new Date());
+      const bookmarked = toggleBookmark(
+        db,
+        currentUserId,
+        lessonId,
+        new Date()
+      );
       return { ok: true, bookmarked };
     }
 
@@ -1029,12 +1042,10 @@ export default function LessonViewer({ loaderData }: Route.ComponentProps) {
     lastWatchPosition,
     watchProgress,
     lessonProgressMap,
-    pppBlocked,
-    pppBlockedCountry,
-    pppPurchaseCountry,
+    regionLock,
     comments,
     canViewContent,
-    canModerate,
+    canManage,
     instructorName,
     bookmarked,
     note,
@@ -1063,15 +1074,8 @@ export default function LessonViewer({ loaderData }: Route.ComponentProps) {
   const quizResult = quizFetcher.data?.quizResult ?? null;
   const isSubmittingQuiz = quizFetcher.state !== "idle";
 
-  if (pppBlocked) {
-    const purchaseCountryName = pppPurchaseCountry
-      ? (COUNTRIES.find((c) => c.code === pppPurchaseCountry)?.name ??
-        pppPurchaseCountry)
-      : "your original country";
-    const currentCountryName = pppBlockedCountry
-      ? (COUNTRIES.find((c) => c.code === pppBlockedCountry)?.name ??
-        pppBlockedCountry)
-      : "a different country";
+  if (regionLock) {
+    const { purchaseCountryName, currentCountryName } = regionLock;
 
     return (
       <div className="flex min-h-[60vh] items-center justify-center p-6">
@@ -1261,7 +1265,7 @@ export default function LessonViewer({ loaderData }: Route.ComponentProps) {
             <CommentThread
               comments={comments}
               currentUserId={currentUserId}
-              canModerate={canModerate}
+              canManage={canManage}
               canPost
               instructorName={instructorName}
             />

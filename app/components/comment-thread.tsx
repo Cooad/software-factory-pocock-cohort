@@ -197,13 +197,13 @@ function CommentActions({
 function CommentItem({
   comment,
   currentUserId,
-  canModerate,
+  canManage,
   canPost,
   isReply,
 }: {
   comment: RenderedComment;
   currentUserId: number | null;
-  canModerate: boolean;
+  canManage: boolean;
   canPost: boolean;
   isReply: boolean;
 }) {
@@ -222,7 +222,7 @@ function CommentItem({
         <Replies
           comment={comment}
           currentUserId={currentUserId}
-          canModerate={canModerate}
+          canManage={canManage}
           canPost={canPost}
         />
       </div>
@@ -285,7 +285,7 @@ function CommentItem({
             <CommentActions
               comment={comment}
               canEdit={isAuthor}
-              canDelete={isAuthor || canModerate}
+              canDelete={isAuthor || canManage}
               canReply={canPost && !isReply}
               onEdit={() => setEditing(true)}
               onReply={() => setReplying(true)}
@@ -310,7 +310,7 @@ function CommentItem({
       <Replies
         comment={comment}
         currentUserId={currentUserId}
-        canModerate={canModerate}
+        canManage={canManage}
         canPost={canPost}
       />
     </div>
@@ -320,12 +320,12 @@ function CommentItem({
 function Replies({
   comment,
   currentUserId,
-  canModerate,
+  canManage,
   canPost,
 }: {
   comment: RenderedComment;
   currentUserId: number | null;
-  canModerate: boolean;
+  canManage: boolean;
   canPost: boolean;
 }) {
   if (comment.replies.length === 0) return null;
@@ -337,7 +337,7 @@ function Replies({
           key={reply.id}
           comment={reply}
           currentUserId={currentUserId}
-          canModerate={canModerate}
+          canManage={canManage}
           canPost={canPost}
           isReply
         />
@@ -349,14 +349,14 @@ function Replies({
 export function CommentThread({
   comments,
   currentUserId,
-  canModerate,
+  canManage,
   canPost,
   instructorName,
 }: {
   comments: RenderedComment[];
   currentUserId: number | null;
   /** Owning instructor or admin — may delete anyone's comment. */
-  canModerate: boolean;
+  canManage: boolean;
   canPost: boolean;
   instructorName: string;
 }) {
@@ -383,7 +383,7 @@ export function CommentThread({
                 key={comment.id}
                 comment={comment}
                 currentUserId={currentUserId}
-                canModerate={canModerate}
+                canManage={canManage}
                 canPost={canPost}
                 isReply={false}
               />
