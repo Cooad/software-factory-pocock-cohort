@@ -25,7 +25,7 @@ export async function renderMarkdown(markdown: string): Promise<string> {
         theme: "github-dark",
       });
     } catch {
-      // Fall back to plain <pre><code> if the language isn't loaded
+      // An unloaded language still renders, as plain escaped code.
       const escaped = text
         .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")

@@ -16,7 +16,6 @@ die() { echo "error: $*" >&2; exit 1; }
 command -v gh >/dev/null || die "install the GitHub CLI: https://cli.github.com"
 command -v jq >/dev/null || die "install jq: https://jqlang.org/download"
 
-# 1. Load the checkpoint from the gist.
 gist=$(gh api "gists/$GIST")
 available=$(jq -r '.files | keys[] | select(endswith(".json")) | rtrimstr(".json")' <<<"$gist")
 checkpoint=${1:-}
@@ -28,7 +27,6 @@ snapshot=$(jq -r --arg f "$checkpoint.json" '.files[$f].content // empty' <<<"$g
 $available"
 gist_url=$(jq -r .html_url <<<"$gist")
 
-# 2. Work out which repo we're seeding: always your origin remote.
 repo=$(gh repo view "$(git remote get-url origin)" --json nameWithOwner --jq .nameWithOwner)
 [ "$repo" != "$COURSE_REPO" ] || die "origin is the course repo itself. Run \`ai-hero fork\` first, then rerun this from your copy."
 echo "Seeding checkpoint $checkpoint into $repo"
@@ -38,19 +36,17 @@ if [ "$(gh repo view "$repo" --json hasIssuesEnabled --jq .hasIssuesEnabled)" !=
   gh repo edit "$repo" --enable-issues
 fi
 
-# 3. Refuse if a map is already open. A closed map doesn't count.
 open_map=$(gh issue list -R "$repo" --label wayfinder:map --state open --json number --jq '.[0].number // empty')
 [ -z "$open_map" ] || die "$repo already has an open Wayfinder map (#$open_map).
 Close it (gh issue close $open_map -R $repo) if you want to seed a fresh set."
 
-# 4. Labels. --force updates any that already exist.
 jq -c '.labels[]' <<<"$snapshot" | while read -r label; do
   gh label create "$(jq -r .name <<<"$label")" -R "$repo" --force \
     --color "$(jq -r .color <<<"$label")" --description "$(jq -r .description <<<"$label")"
 done
 
-# 5. Create the issues in map order. Bodies come later, once we know every
-#    new number. `numbers` maps old number -> {number, id} (id = database id).
+# Bodies come later, once we know every new number. `numbers` maps old
+# number -> {number, id} (id = database id).
 numbers='{}'
 for key in $(jq -r '.issues[].key' <<<"$snapshot"); do
   created=$(jq '.issues[] | select(.key == '"$key"') | {title, labels, body: "Seeding..."}' <<<"$snapshot" |
@@ -60,8 +56,8 @@ for key in $(jq -r '.issues[].key' <<<"$snapshot"); do
 done
 new() { jq -r --arg key "$1" ".[\$key].$2" <<<"$numbers"; }
 
-# 6. Point every link at your repo: issue URLs and #N refs get the new
-#    numbers, research docs point at the gist.
+# Point every link at your repo: issue URLs and #N refs get the new numbers,
+# research docs point at the gist.
 snapshot=$(jq --arg repo "$repo" --arg from "$COURSE_REPO" --arg gist "$gist_url" --argjson numbers "$numbers" '
   def renumber: ($numbers[.n].number // .n) | tostring;
   def rewrite:
@@ -75,21 +71,18 @@ for key in $(jq -r '.issues[].key' <<<"$snapshot"); do
     gh api -X PATCH "repos/$repo/issues/$(new "$key" number)" --input - --silent
 done
 
-# 7. Sub-issues, in map order.
 for parent in $(jq -r '.issues[] | select(.sub_issues | length > 0) | .key' <<<"$snapshot"); do
   for child in $(jq -r '.issues[] | select(.key == '"$parent"') | .sub_issues[]' <<<"$snapshot"); do
     gh api -X POST "repos/$repo/issues/$(new "$parent" number)/sub_issues" -F sub_issue_id="$(new "$child" id)" --silent
   done
 done
 
-# 8. Blocked-by edges.
 for key in $(jq -r '.issues[] | select(.blocked_by | length > 0) | .key' <<<"$snapshot"); do
   for blocker in $(jq -r '.issues[] | select(.key == '"$key"') | .blocked_by[]' <<<"$snapshot"); do
     gh api -X POST "repos/$repo/issues/$(new "$key" number)/dependencies/blocked_by" -F issue_id="$(new "$blocker" id)" --silent
   done
 done
 
-# 9. Comments, then close whatever was closed.
 for key in $(jq -r '.issues[].key' <<<"$snapshot"); do
   jq -c '.issues[] | select(.key == '"$key"') | .comments[]' <<<"$snapshot" | while read -r comment; do
     gh api "repos/$repo/issues/$(new "$key" number)/comments" --input - --silent <<<"$comment"

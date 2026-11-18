@@ -181,7 +181,6 @@ function EditableUserRow({
     setEditEmail(user.email);
   }, [user.name, user.email]);
 
-  // Close edit mode on successful save
   useEffect(() => {
     if (updateFetcher.state === "idle" && updateFetcher.data?.success) {
       setIsEditing(false);
@@ -378,7 +377,6 @@ export default function AdminUsers({ loaderData }: Route.ComponentProps) {
 
   return (
     <div className="mx-auto max-w-7xl p-6 lg:p-8">
-      {/* Breadcrumb */}
       <nav className="mb-6 text-sm text-muted-foreground">
         <Link to="/" className="hover:text-foreground">
           Home

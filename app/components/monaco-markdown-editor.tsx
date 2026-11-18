@@ -51,7 +51,6 @@ export function MonacoMarkdownEditor({
     });
     monaco.editor.setTheme("cadence-dark");
 
-    // Register Prettier as Monaco's native document formatter for Markdown
     monaco.languages.registerDocumentFormattingEditProvider("markdown", {
       provideDocumentFormattingEdits: async (model: Monaco.editor.ITextModel) => {
         try {
@@ -77,7 +76,6 @@ export function MonacoMarkdownEditor({
       },
     });
 
-    // Ctrl+S / Cmd+S to format with Prettier then save
     editor.addCommand(
       monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS,
       async () => {

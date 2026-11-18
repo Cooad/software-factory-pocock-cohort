@@ -46,7 +46,6 @@ function getUnansweredQuestions(instructorId: number | null): QueuedQuestion[] {
   const reply = alias(comments, "reply");
   const replyAuthor = alias(users, "reply_author");
 
-  // Correlated: matches a live reply, by staff, to the outer question.
   const staffReply = db
     .select({ one: sql`1` })
     .from(reply)
@@ -117,7 +116,6 @@ function getCourseForLesson(lessonId: number) {
     .get();
 }
 
-// A question sitting this long without an answer gets called out visually.
 const STALE_AFTER_DAYS = 3;
 
 const replySchema = z.object({
@@ -133,7 +131,6 @@ export function meta() {
 export async function loader({ request }: Route.LoaderArgs) {
   const { userId, isAdmin } = await requireInstructorOrAdmin(request);
 
-  // Admins span every course; instructors see only the courses they own.
   const questions = getUnansweredQuestions(isAdmin ? null : userId);
 
   const rendered = await Promise.all(

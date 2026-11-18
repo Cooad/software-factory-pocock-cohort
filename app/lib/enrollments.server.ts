@@ -8,13 +8,7 @@ import {
   type Notifications,
 } from "~/lib/notifications.server";
 
-// ─── Enrollments ───
-// Giving a Student an Enrollment on a course, whether it came from an
-// Individual Purchase or a Claimed Seat. See GLOSSARY.md for the language and
-// docs/adr/0004 for why an Enrollment is not tied to a Purchase.
-//
-// Every function takes the database first, so tests can hand in an in-memory
-// one. Uses positional parameters (project convention).
+// See docs/adr/0004 for why an Enrollment is not tied to a Purchase.
 
 export type Db = BetterSQLite3Database<typeof schema>;
 type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
@@ -22,7 +16,6 @@ type Queryable = Db | Tx;
 
 type Enrollment = typeof enrollments.$inferSelect;
 
-/** Whether the Student has an Enrollment on the course right now. */
 export function isEnrolled(
   db: Queryable,
   studentId: number,
@@ -40,11 +33,7 @@ export function isEnrolled(
 export type EnrollResult =
   { ok: true; enrollment: Enrollment } | { ok: false; error: string };
 
-/**
- * Gives the Student an Enrollment, then sends the new Enrollment Notification
- * to the course's Instructor. A Notification failure is logged and never fails
- * the Enrollment.
- */
+/** A Notification failure is logged and never fails the Enrollment. */
 export async function enrollStudent(
   db: Db,
   studentId: number,
@@ -93,8 +82,8 @@ export function enrollStudentInTransaction(
 }
 
 /**
- * Sends the new Enrollment Notification to the course's Instructor. Their
- * Enrollments preference is off until they opt in; Knock applies it.
+ * The Instructor's Enrollments preference is off until they opt in; Knock
+ * applies it, not this code.
  */
 export async function notifyInstructorOfEnrollment(
   db: Db,

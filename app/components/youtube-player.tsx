@@ -44,7 +44,7 @@ function loadYouTubeAPI(): Promise<void> {
       'script[src="https://www.youtube.com/iframe_api"]'
     );
     if (existingScript) {
-      // Script exists but YT not ready yet — wait for the callback
+      // Another player already injected the script; chain onto its ready callback.
       const prev = window.onYouTubeIframeAPIReady;
       window.onYouTubeIframeAPIReady = () => {
         prev?.();
@@ -91,7 +91,7 @@ export function YouTubePlayer({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ lessonId, eventType, positionSeconds }),
       }).catch(() => {
-        // Silently fail — tracking is best-effort
+        // Tracking is best-effort.
       });
     },
     [lessonId, trackingEnabled]

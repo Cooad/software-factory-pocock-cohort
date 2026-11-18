@@ -417,7 +417,6 @@ export async function loader({ params, request }: Route.LoaderArgs) {
     }
   }
 
-  // Render sales copy from Markdown to HTML server-side
   const salesCopyHtml = await renderMarkdown(courseWithDetails.salesCopy);
 
   const ratingSummary = getCourseRatingSummary(course.id);
@@ -631,7 +630,6 @@ export default function CourseDetail({ loaderData }: Route.ComponentProps) {
 
   return (
     <div className="mx-auto max-w-7xl p-6 lg:p-8">
-      {/* Breadcrumb */}
       <nav className="mb-6 text-sm text-muted-foreground">
         <Link to="/courses" className="hover:text-foreground">
           Courses
@@ -640,7 +638,6 @@ export default function CourseDetail({ loaderData }: Route.ComponentProps) {
         <span className="text-foreground">{course.title}</span>
       </nav>
 
-      {/* Hero section */}
       <div className="mb-8">
         <div className="mb-6 aspect-video max-h-64 overflow-hidden rounded-lg">
           <CourseImage
@@ -694,16 +691,13 @@ export default function CourseDetail({ loaderData }: Route.ComponentProps) {
         </div>
       </div>
 
-      {/* Two-column: sales copy left, sidebar right */}
       <div className="grid gap-8 lg:grid-cols-3">
-        {/* Left column: sales copy + course content */}
         <div className="lg:col-span-2">
           <div
             className="prose prose-neutral dark:prose-invert max-w-none"
             dangerouslySetInnerHTML={{ __html: salesCopyHtml }}
           />
 
-          {/* Bottom CTA */}
           {!enrolled && !isInstructor && (
             <div className="mt-8 rounded-lg border bg-muted/50 p-6">
               <h3 className="mb-2 text-lg font-semibold">
@@ -726,7 +720,6 @@ export default function CourseDetail({ loaderData }: Route.ComponentProps) {
           </div>
         </div>
 
-        {/* Right column: progress/enrollment card */}
         <div className="space-y-6">
           <Card className="sticky top-6">
             <CardHeader>

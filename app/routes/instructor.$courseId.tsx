@@ -207,7 +207,6 @@ function updateModuleTitle(id: number, title: string) {
 }
 
 function deleteModule(id: number) {
-  // Delete all lessons in this module first
   db.delete(lessons).where(eq(lessons.moduleId, id)).run();
   return db.delete(modules).where(eq(modules.id, id)).returning().get();
 }
@@ -268,7 +267,6 @@ function moveLessonToModule(
 
   const sourceModuleId = lesson.moduleId;
 
-  // 1. Close the gap in the source module
   db.update(lessons)
     .set({ position: sql`${lessons.position} - 1` })
     .where(
@@ -279,7 +277,6 @@ function moveLessonToModule(
     )
     .run();
 
-  // 2. Open a gap in the destination module
   db.update(lessons)
     .set({ position: sql`${lessons.position} + 1` })
     .where(
@@ -290,7 +287,6 @@ function moveLessonToModule(
     )
     .run();
 
-  // 3. Move the lesson to the target module at the target position
   return db
     .update(lessons)
     .set({ moduleId: targetModuleId, position: targetPosition })
@@ -531,10 +527,8 @@ export async function loader({ params, request }: Route.LoaderArgs) {
   const lessonCount = getLessonCountForCourse(courseId);
   const enrollmentCount = getEnrollmentCountForCourse(courseId);
 
-  // Student roster data
   const enrolledStudents = getCourseEnrolledStudents(courseId);
 
-  // Gather all lessons from the course modules and find which have quizzes
   const allCourseLessons = course.modules.flatMap((mod) => mod.lessons);
   const lessonQuizzes: {
     lessonId: number;
@@ -820,7 +814,6 @@ function InlineEditableTitle({
     }
   }, [fetcher.state, fetcher.data]);
 
-  // Update local state when server responds with new data
   useEffect(() => {
     setEditValue(value);
   }, [value]);
@@ -892,7 +885,6 @@ function InlineEditableDescription({
     if (isEditing && textareaRef.current) {
       textareaRef.current.focus();
       textareaRef.current.select();
-      // Auto-resize
       textareaRef.current.style.height = "auto";
       textareaRef.current.style.height =
         textareaRef.current.scrollHeight + "px";
@@ -1121,7 +1113,6 @@ function AddModuleForm() {
     }
   }, [isAdding]);
 
-  // Reset form after successful submission
   useEffect(() => {
     if (fetcher.state === "idle" && fetcher.data?.success) {
       setTitle("");
@@ -1552,7 +1543,6 @@ export default function InstructorCourseEditor({
       );
 
       if (sourceModuleId === destModuleId) {
-        // Reorder within the same module
         const mod = course.modules.find((m) => m.id === sourceModuleId);
         if (!mod) return;
 
@@ -1570,14 +1560,13 @@ export default function InstructorCourseEditor({
           { method: "post" }
         );
       } else {
-        // Move lesson to a different module
         const sourceMod = course.modules.find((m) => m.id === sourceModuleId);
         if (!sourceMod) return;
 
         const lesson = sourceMod.lessons[result.source.index];
         if (!lesson) return;
 
-        // Target position is 1-based (destination index + 1)
+        // Lesson positions are 1-based.
         const targetPosition = result.destination.index + 1;
 
         lessonReorderFetcher.submit(
@@ -1595,7 +1584,6 @@ export default function InstructorCourseEditor({
 
   return (
     <div className="mx-auto max-w-7xl p-6 lg:p-8">
-      {/* Breadcrumb */}
       <nav className="mb-6 text-sm text-muted-foreground">
         <Link to="/instructor" className="hover:text-foreground">
           My Courses
@@ -1612,7 +1600,6 @@ export default function InstructorCourseEditor({
         Back to My Courses
       </Link>
 
-      {/* Course Header with inline editing */}
       <div className="mb-8">
         <InlineEditableTitle value={course.title} courseId={course.id} />
         <div className="mt-2">
@@ -1622,7 +1609,6 @@ export default function InstructorCourseEditor({
           />
         </div>
 
-        {/* Stats row */}
         <div className="mt-4 flex flex-wrap items-center gap-4 px-3 text-sm text-muted-foreground">
           <span className="flex items-center gap-1.5">
             <BookOpen className="size-4" />
@@ -1638,7 +1624,6 @@ export default function InstructorCourseEditor({
         </div>
       </div>
 
-      {/* Tabs */}
       <Tabs defaultValue="content">
         <TabsList>
           <TabsTrigger value="content">
@@ -1659,7 +1644,6 @@ export default function InstructorCourseEditor({
           </TabsTrigger>
         </TabsList>
 
-        {/* Content Tab */}
         <TabsContent value="content" className="mt-6">
           {course.modules.length === 0 ? (
             <Card>
@@ -1842,7 +1826,6 @@ export default function InstructorCourseEditor({
           <AddModuleForm />
         </TabsContent>
 
-        {/* Settings Tab */}
         <TabsContent value="settings" className="mt-6">
           <div className="space-y-6">
             <Card>
@@ -1965,7 +1948,6 @@ export default function InstructorCourseEditor({
           </div>
         </TabsContent>
 
-        {/* Sales Copy Tab */}
         <TabsContent value="sales-copy" className="mt-6">
           <Card>
             <CardHeader>
@@ -2011,7 +1993,6 @@ export default function InstructorCourseEditor({
           </Card>
         </TabsContent>
 
-        {/* Students Tab */}
         <TabsContent value="students" className="mt-6">
           <div className="mb-4 flex items-center gap-4 text-sm text-muted-foreground">
             <span className="flex items-center gap-1.5">

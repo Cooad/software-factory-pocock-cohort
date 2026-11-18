@@ -1,7 +1,3 @@
-// ─── PPP (Purchasing Power Parity) Config ───
-// Hardcoded tier definitions and country-to-tier mappings.
-// Tiers determine the discount percentage applied at purchase time.
-
 export const PPP_TIERS = {
   1: { discount: 0, label: "Full Price" },
   2: { discount: 0.3, label: "30% off" },
@@ -12,13 +8,9 @@ export const PPP_TIERS = {
 export type PppTier = keyof typeof PPP_TIERS;
 
 const COUNTRY_TIER_MAP: Record<string, PppTier> = {
-  // Tier 1 — Full price
   US: 1, CA: 1, GB: 1, AU: 1, DE: 1, FR: 1, NL: 1, SE: 1, NO: 1, CH: 1, JP: 1, SG: 1,
-  // Tier 2 — 30% off
   PL: 2, MX: 2, BR: 2, TR: 2, TH: 2, MY: 2, CZ: 2, CL: 2,
-  // Tier 3 — 50% off
   IN: 3, CO: 3, AR: 3, ZA: 3, PH: 3, VN: 3, UA: 3, ID: 3,
-  // Tier 4 — 70% off
   NG: 4, PK: 4, BD: 4, EG: 4, KE: 4, ET: 4,
 };
 
@@ -43,10 +35,6 @@ export function getCountryTierInfo(countryCode: string | null) {
   return { tier, discount, label };
 }
 
-/**
- * Pure function to check if PPP access should be blocked.
- * Returns blocked=true when a discounted purchase is accessed from a different country.
- */
 export function checkPppAccess(
   coursePrice: number,
   coursePppEnabled: boolean,
@@ -55,17 +43,14 @@ export function checkPppAccess(
 ): { blocked: boolean; blockedCountry: string | null; purchaseCountry: string | null } {
   const result = { blocked: false, blockedCountry: null as string | null, purchaseCountry: null as string | null };
 
-  // Skip: free courses or PPP-disabled courses
   if (coursePrice <= 0 || !coursePppEnabled) return result;
 
-  // Skip: no purchase country recorded
   if (!purchaseCountry) return result;
 
-  // Skip: full-price (Tier 1) purchases — no geographic restriction
+  // A full-price purchase has no discount to protect, so it may be used anywhere.
   const purchaseTier = getTierForCountry(purchaseCountry);
   if (purchaseTier === 1) return result;
 
-  // Discounted purchase — verify country match
   if (currentCountry && currentCountry !== purchaseCountry) {
     result.blocked = true;
     result.blockedCountry = currentCountry;
@@ -76,8 +61,6 @@ export function checkPppAccess(
 }
 
 /**
- * A country code as a name, falling back to the code itself.
- *
  * A purchase can carry a code this list has never heard of — the code is
  * recorded at purchase time and the list is hardcoded here — and showing the
  * raw code beats showing nothing.
@@ -86,7 +69,6 @@ export function countryName(code: string): string {
   return COUNTRIES.find((country) => country.code === code)?.name ?? code;
 }
 
-// All countries with their names, for the dev UI dropdown
 export const COUNTRIES: { code: string; name: string }[] = [
   { code: "AR", name: "Argentina" },
   { code: "AU", name: "Australia" },

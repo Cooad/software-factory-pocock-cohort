@@ -32,8 +32,6 @@ sqlite.pragma("foreign_keys = ON");
 
 const db = drizzle(sqlite, { schema });
 
-// ─── Helpers ───
-
 function daysAgo(n: number): string {
   const d = new Date();
   d.setDate(d.getDate() - n);
@@ -65,12 +63,9 @@ function makeRandom(seed: number): () => number {
   };
 }
 
-// ─── Seed Data ───
-
 async function seed() {
   console.log("Seeding database...");
 
-  // Drop and recreate tables for a clean seed
   sqlite.exec(`
     DROP TABLE IF EXISTS bookmarks;
     DROP TABLE IF EXISTS notes;
@@ -97,7 +92,6 @@ async function seed() {
     DROP TABLE IF EXISTS __drizzle_migrations;
   `);
 
-  // Create tables using the same Drizzle migrations as the live database
   migrate(db, { migrationsFolder });
 
   console.log("Tables created.");
@@ -110,10 +104,6 @@ async function seed() {
     return (where ? query.where(where) : query).get()?.count ?? 0;
   }
 
-  // ─── Users ───
-  // 1 admin, 3 instructors (one of whom owns no courses, so the empty
-  // instructor dashboard is reachable), and ~40 students.
-  //
   // Students are split in two: the five named students below, who own all the
   // hand-written narrative data (comments, quiz attempts, ratings), and the
   // cohort generated further down, which supplies volume. Anything that picks a
@@ -228,9 +218,6 @@ async function seed() {
     .returning()
     .all();
 
-  // The wider student body. These carry the bulk purchase and progress history
-  // generated at the bottom of this file. Sign-up dates are spread across the
-  // last twelve months, including the last few days.
   const cohortNames = [
     "Ava Nakamura", "Noah Blackwood", "Isla Fernandes", "Ethan Okafor",
     "Mia Lindqvist", "Lucas Moreau", "Zara Haddad", "Felix Andersen",
@@ -248,20 +235,15 @@ async function seed() {
     .values(
       cohortNames.map((name, i) => ({
         name,
-        // Matches the named students above: first.last@student.dev.
         email: `${slugify(name).replace(/-/g, ".")}@student.dev`,
         role: UserRole.Student,
         avatarUrl: `https://api.dicebear.com/9.x/avataaars/svg?seed=${slugify(name)}`,
-        // Spread across ~12 months, tightening towards today so the recent
-        // ranges are populated. The last few sign up inside the last week.
         createdAt: daysAgo(Math.round(355 - i * 10.4)),
       }))
     )
     .returning()
     .all();
 
-  // Every student, named and generated. Look students up by email rather than
-  // by index — see the note in the users header.
   const allStudents = [...students, bossy, ...cohort];
   const studentsByEmail = new Map(allStudents.map((s) => [s.email, s]));
 
@@ -271,14 +253,18 @@ async function seed() {
     return student;
   }
 
+  const emma = studentByEmail("emma.wilson@student.dev");
+  const james = studentByEmail("james.park@student.dev");
+  const olivia = studentByEmail("olivia.martinez@student.dev");
+  const liam = studentByEmail("liam@example.com");
+  const sophia = studentByEmail("sophia.davis@student.dev");
+
   const instructorCount = 3;
   const studentCount = allStudents.length;
 
   console.log(
     `Created ${1 + instructorCount + studentCount} users (1 admin, ${instructorCount} instructors, ${studentCount} students).`
   );
-
-  // ─── Categories ───
 
   const categoriesData = db
     .insert(schema.categories)
@@ -296,8 +282,6 @@ async function seed() {
 
   console.log(`Created ${categoriesData.length} categories.`);
 
-  // ─── Course content ───
-
   type LessonSpec = {
     title: string;
     duration: number;
@@ -308,8 +292,6 @@ async function seed() {
 
   type ModuleSpec = { title: string; lessons: LessonSpec[] };
 
-  // Inserts a course's modules and lessons in order and returns the lesson ids,
-  // flattened module by module. Positions are 1-based.
   function insertCourseContent(
     courseId: number,
     moduleSpecs: ModuleSpec[],
@@ -352,8 +334,6 @@ async function seed() {
 
     return lessonIds;
   }
-
-  // ─── Course 1: Introduction to TypeScript (Sarah Chen) ───
 
   const [course1] = db
     .insert(schema.courses)
@@ -403,7 +383,6 @@ By the end of this course, you'll understand why TypeScript has become the defau
     .returning()
     .all();
 
-  // Course 1 modules and lessons
   const c1Modules = [
     {
       title: "Getting Started with TypeScript",
@@ -773,8 +752,6 @@ Practice by converting an existing JavaScript project to TypeScript. Start with 
   console.log(
     `Created course "${course1.title}" with ${c1Modules.length} modules and ${course1LessonIds.length} lessons.`
   );
-
-  // ─── Course 2: Building REST APIs with Node.js (Marcus Johnson) ───
 
   const [course2] = db
     .insert(schema.courses)
@@ -1240,7 +1217,6 @@ You've completed the Building REST APIs course. You now have the skills to build
     `Created course "${course2.title}" with ${c2Modules.length} modules and ${course2LessonIds.length} lessons.`
   );
 
-  // ─── Course 3: Design Systems with Tailwind (Sarah Chen) ───
   // A second selling course for Sarah, so the per-instructor views have more
   // than one row and revenue splits across courses.
 
@@ -1368,7 +1344,6 @@ Frontend developers who have built components before and watched the collection 
     `Created course "${course3.title}" with 3 modules and ${course3LessonIds.length} lessons.`
   );
 
-  // ─── Course 4: Practical Data Visualisation (Marcus Johnson) ───
   // Published but has never sold. The analytics views must render a course with
   // zero revenue, zero enrolments and zero progress without dividing by it.
 
@@ -1466,7 +1441,6 @@ Developers and analysts who produce charts for other people to act on.`,
     `Created course "${course4.title}" with 2 modules and ${course4LessonIds.length} lessons (published, no sales).`
   );
 
-  // ─── Course 5: Shipping with Docker and Kubernetes (Marcus Johnson) ───
   // Draft — never appears in the catalogue, and must be excluded from published
   // course counts and revenue.
 
@@ -1556,14 +1530,10 @@ This course is still in draft while the cluster examples are rewritten against t
     `Created course "${course5.title}" with 2 modules and ${course5LessonIds.length} lessons (draft).`
   );
 
-  // ─── Quizzes ───
-  // Add quizzes to some lessons in both courses
-
-  // Quiz 1: TypeScript Basics Quiz (attached to "Your First TypeScript Program", lesson 3 of course 1)
   const [quiz1] = db
     .insert(schema.quizzes)
     .values({
-      lessonId: course1LessonIds[2], // "Your First TypeScript Program"
+      lessonId: course1LessonIds[2],
       title: "TypeScript Basics Quiz",
       passingScore: 0.7,
     })
@@ -1638,11 +1608,10 @@ This course is still in draft while the cluster examples are rewritten against t
     }
   }
 
-  // Quiz 2: Generics Quiz (attached to "Generics Basics", lesson index 5 in course 1)
   const [quiz2] = db
     .insert(schema.quizzes)
     .values({
-      lessonId: course1LessonIds[7], // "Generics Basics" (module 3, lesson 2)
+      lessonId: course1LessonIds[7],
       title: "Generics Knowledge Check",
       passingScore: 0.6,
     })
@@ -1707,11 +1676,10 @@ This course is still in draft while the cluster examples are rewritten against t
     }
   }
 
-  // Quiz 3: REST API Basics (attached to "HTTP Methods and Status Codes", lesson index 2 in course 2)
   const [quiz3] = db
     .insert(schema.quizzes)
     .values({
-      lessonId: course2LessonIds[2], // "HTTP Methods and Status Codes"
+      lessonId: course2LessonIds[2],
       title: "HTTP Methods Quiz",
       passingScore: 0.7,
     })
@@ -1790,76 +1758,66 @@ This course is still in draft while the cluster examples are rewritten against t
     `Created ${countRows(schema.quizzes)} quizzes with ${countRows(schema.quizQuestions)} questions and ${countRows(schema.quizOptions)} options.`
   );
 
-  // ─── Enrollments ───
-  // Varied enrollment patterns:
-  // - Emma: enrolled in both courses (nearly complete in course 1, mid-way in course 2)
-  // - James: enrolled in course 1 only (completed)
-  // - Olivia: enrolled in both courses (just started course 1, mid-way in course 2)
-  // - Liam: enrolled in course 2 only (just started, abandoned)
-  // - Sophia: enrolled in course 1 only (recently enrolled, barely started)
-
   db.insert(schema.enrollments)
     .values([
-      { userId: students[0].id, courseId: course1.id, enrolledAt: daysAgo(50) },
-      { userId: students[0].id, courseId: course2.id, enrolledAt: daysAgo(40) },
+      { userId: emma.id, courseId: course1.id, enrolledAt: daysAgo(50) },
+      { userId: emma.id, courseId: course2.id, enrolledAt: daysAgo(40) },
       {
-        userId: students[1].id,
+        userId: james.id,
         courseId: course1.id,
         enrolledAt: daysAgo(45),
         completedAt: daysAgo(10),
       },
-      { userId: students[2].id, courseId: course1.id, enrolledAt: daysAgo(35) },
-      { userId: students[2].id, courseId: course2.id, enrolledAt: daysAgo(30) },
-      { userId: students[3].id, courseId: course2.id, enrolledAt: daysAgo(25) },
-      { userId: students[4].id, courseId: course1.id, enrolledAt: daysAgo(15) },
+      { userId: olivia.id, courseId: course1.id, enrolledAt: daysAgo(35) },
+      { userId: olivia.id, courseId: course2.id, enrolledAt: daysAgo(30) },
+      { userId: liam.id, courseId: course2.id, enrolledAt: daysAgo(25) },
+      { userId: sophia.id, courseId: course1.id, enrolledAt: daysAgo(15) },
     ])
     .run();
 
   console.log(`Created ${countRows(schema.enrollments)} enrollments.`);
 
-  // ─── Course Ratings ───
-  // Star ratings from enrolled students only. Not everyone rates.
-  // Course 1 averages 4.3 (4 ratings), course 2 averages 4.5 (2 ratings).
+  // Only enrolled students rate, and not every one of them does.
 
   db.insert(schema.courseRatings)
     .values([
       {
-        userId: students[0].id,
+        userId: emma.id,
         courseId: course1.id,
         rating: 5,
         createdAt: daysAgo(20),
         updatedAt: daysAgo(20),
       },
       {
-        userId: students[1].id,
+        userId: james.id,
         courseId: course1.id,
         rating: 5,
         createdAt: daysAgo(9),
         updatedAt: daysAgo(9),
       },
       {
-        userId: students[2].id,
+        userId: olivia.id,
         courseId: course1.id,
         rating: 4,
         createdAt: daysAgo(18),
         updatedAt: daysAgo(18),
       },
       {
-        userId: students[4].id,
+        userId: sophia.id,
         courseId: course1.id,
         rating: 3,
         createdAt: daysAgo(5),
         updatedAt: daysAgo(5),
       },
       {
-        userId: students[0].id,
+        userId: emma.id,
         courseId: course2.id,
         rating: 4,
         createdAt: daysAgo(12),
         updatedAt: daysAgo(12),
       },
       {
-        userId: students[3].id,
+        userId: liam.id,
         courseId: course2.id,
         rating: 5,
         createdAt: daysAgo(8),
@@ -1870,7 +1828,6 @@ This course is still in draft while the cluster examples are rewritten against t
 
   console.log(`Created ${countRows(schema.courseRatings)} course ratings.`);
 
-  // ─── Lesson Comments ───
   // Covers every state the Q&A feature can be in, so the instructor queue and
   // the lesson thread both have something real to render: answered threads,
   // questions still waiting (two of them stale enough to flag), a question only
@@ -1886,7 +1843,7 @@ This course is still in draft while the cluster examples are rewritten against t
   // Answered: student asks, Sarah answers, student confirms.
   const c1q1 = comment({
     lessonId: course1LessonIds[2],
-    userId: students[0].id,
+    userId: emma.id,
     body: "I'm getting `tsc: command not found` when I run the compile step. Did I miss an install somewhere?",
     createdAt: daysAgo(30),
   });
@@ -1899,7 +1856,7 @@ This course is still in draft while the cluster examples are rewritten against t
   });
   comment({
     lessonId: course1LessonIds[2],
-    userId: students[0].id,
+    userId: emma.id,
     parentId: c1q1.id,
     body: "`npx` did it. Thank you!",
     createdAt: daysAgo(29),
@@ -1908,7 +1865,7 @@ This course is still in draft while the cluster examples are rewritten against t
   // Waiting, and stale enough to flag amber in the queue.
   comment({
     lessonId: course1LessonIds[7],
-    userId: students[2].id,
+    userId: olivia.id,
     body: "Why does this fail to infer? I expected `T` to come out as `string`.\n\n```typescript\nfunction first<T>(items: T[]): T {\n  return items[0];\n}\n\nconst x = first([]);\n```",
     createdAt: daysAgo(6),
   });
@@ -1916,7 +1873,7 @@ This course is still in draft while the cluster examples are rewritten against t
   // Waiting, but posted today — should look calm in the queue.
   comment({
     lessonId: course1LessonIds[4],
-    userId: students[4].id,
+    userId: sophia.id,
     body: "Is there a reason to prefer `interface` over `type` here, or is it purely style?",
     createdAt: daysAgo(1),
   });
@@ -1924,13 +1881,13 @@ This course is still in draft while the cluster examples are rewritten against t
   // Another student replied, but no staff has — still counts as unanswered.
   const c1q4 = comment({
     lessonId: course1LessonIds[3],
-    userId: students[1].id,
+    userId: james.id,
     body: "Does strict mode change anything about how this example behaves?",
     createdAt: daysAgo(4),
   });
   comment({
     lessonId: course1LessonIds[3],
-    userId: students[0].id,
+    userId: emma.id,
     parentId: c1q4.id,
     body: "I think it only affects the null checks, but I'd like a second opinion too.",
     createdAt: daysAgo(4),
@@ -1939,7 +1896,7 @@ This course is still in draft while the cluster examples are rewritten against t
   // Edited by its author — renders an "(edited)" marker.
   const c1q5 = comment({
     lessonId: course1LessonIds[0],
-    userId: students[1].id,
+    userId: james.id,
     body: "Coming from JavaScript, how much of this will feel familiar? (Edited to add: I've used JSDoc types before.)",
     createdAt: daysAgo(40),
     editedAt: daysAgo(39),
@@ -1955,7 +1912,7 @@ This course is still in draft while the cluster examples are rewritten against t
   // Deleted question that keeps its reply — renders as a tombstone.
   const c1q6 = comment({
     lessonId: course1LessonIds[1],
-    userId: students[4].id,
+    userId: sophia.id,
     body: "Posted this on the wrong lesson, sorry!",
     createdAt: daysAgo(12),
     deletedAt: daysAgo(12),
@@ -1971,7 +1928,7 @@ This course is still in draft while the cluster examples are rewritten against t
   // Course 2: waiting a long time.
   comment({
     lessonId: course2LessonIds[2],
-    userId: students[3].id,
+    userId: liam.id,
     body: "When would you return a 422 instead of a 400? The distinction still isn't clicking for me.",
     createdAt: daysAgo(9),
   });
@@ -1979,7 +1936,7 @@ This course is still in draft while the cluster examples are rewritten against t
   // Course 2: answered by an admin rather than the owning instructor.
   const c2q2 = comment({
     lessonId: course2LessonIds[0],
-    userId: students[2].id,
+    userId: olivia.id,
     body: "Are the example requests in this lesson hitting a real API, or is it all mocked?",
     createdAt: daysAgo(14),
   });
@@ -2003,9 +1960,6 @@ This course is still in draft while the cluster examples are rewritten against t
     `Created ${countRows(schema.comments)} lesson comments across ${countRows(schema.comments, isNull(schema.comments.parentId))} threads.`
   );
 
-  // ─── Lesson Progress ───
-
-  // Helper to mark lessons as complete
   function markComplete(
     userId: number,
     lessonId: number,
@@ -2031,42 +1985,35 @@ This course is still in draft while the cluster examples are rewritten against t
       .run();
   }
 
-  // Emma (students[0]) — nearly complete in course 1 (17 of 19 lessons done)
   for (let i = 0; i < 17; i++) {
-    markComplete(students[0].id, course1LessonIds[i], 50 - i);
+    markComplete(emma.id, course1LessonIds[i], 50 - i);
   }
-  markInProgress(students[0].id, course1LessonIds[17]);
+  markInProgress(emma.id, course1LessonIds[17]);
 
-  // Emma — mid-way through course 2 (10 of 20 lessons done)
   for (let i = 0; i < 10; i++) {
-    markComplete(students[0].id, course2LessonIds[i], 40 - i);
+    markComplete(emma.id, course2LessonIds[i], 40 - i);
   }
-  markInProgress(students[0].id, course2LessonIds[10]);
+  markInProgress(emma.id, course2LessonIds[10]);
 
-  // James (students[1]) — completed all of course 1
   for (let i = 0; i < course1LessonIds.length; i++) {
-    markComplete(students[1].id, course1LessonIds[i], 45 - i);
+    markComplete(james.id, course1LessonIds[i], 45 - i);
   }
 
-  // Olivia (students[2]) — just started course 1 (3 lessons done)
   for (let i = 0; i < 3; i++) {
-    markComplete(students[2].id, course1LessonIds[i], 30 - i);
+    markComplete(olivia.id, course1LessonIds[i], 30 - i);
   }
-  markInProgress(students[2].id, course1LessonIds[3]);
+  markInProgress(olivia.id, course1LessonIds[3]);
 
-  // Olivia — mid-way through course 2 (8 lessons done)
   for (let i = 0; i < 8; i++) {
-    markComplete(students[2].id, course2LessonIds[i], 28 - i);
+    markComplete(olivia.id, course2LessonIds[i], 28 - i);
   }
 
-  // Liam (students[3]) — just started course 2, abandoned (2 lessons done)
   for (let i = 0; i < 2; i++) {
-    markComplete(students[3].id, course2LessonIds[i], 22 - i);
+    markComplete(liam.id, course2LessonIds[i], 22 - i);
   }
 
-  // Sophia (students[4]) — barely started course 1 (1 lesson done)
-  markComplete(students[4].id, course1LessonIds[0], 12);
-  markInProgress(students[4].id, course1LessonIds[1]);
+  markComplete(sophia.id, course1LessonIds[0], 12);
+  markInProgress(sophia.id, course1LessonIds[1]);
 
   console.log(`Created ${countRows(schema.lessonProgress)} lesson progress records.`);
 
@@ -2097,40 +2044,36 @@ This course is still in draft while the cluster examples are rewritten against t
       .run();
   }
 
-  bookmark(students[0].id, course1LessonIds[4], 44);
-  bookmark(students[0].id, course1LessonIds[12], 38);
-  bookmark(students[0].id, course2LessonIds[3], 36);
+  bookmark(emma.id, course1LessonIds[4], 44);
+  bookmark(emma.id, course1LessonIds[12], 38);
+  bookmark(emma.id, course2LessonIds[3], 36);
   note(
-    students[0].id,
+    emma.id,
     course1LessonIds[4],
     "Rewatch the part about generics.\n# and * should show exactly as typed.",
     45,
     20
   );
-  note(students[0].id, course2LessonIds[2], "Try this on the side project.", 37, 37);
+  note(emma.id, course2LessonIds[2], "Try this on the side project.", 37, 37);
 
-  bookmark(students[2].id, course1LessonIds[1], 29);
-  note(students[2].id, course1LessonIds[2], "Confusing — ask in the discussion?", 28, 27);
+  bookmark(olivia.id, course1LessonIds[1], 29);
+  note(olivia.id, course1LessonIds[2], "Confusing — ask in the discussion?", 28, 27);
 
   console.log(
     `Created ${countRows(schema.bookmarks)} bookmarks and ${countRows(schema.notes)} notes.`
   );
 
-  // ─── Quiz Attempts ───
-
-  // Helper to record a quiz attempt with answers
   function recordQuizAttempt(
     userId: number,
     quizId: number,
     optionIds: { questionId: number; optionId: number; correct: boolean }[],
-    selectedCorrectIndices: number[], // which questions (0-based) the student got right
+    correctQuestionIndices: number[],
     attemptDaysAgo: number
   ) {
     const totalQuestions = new Set(optionIds.map((o) => o.questionId)).size;
-    const correctCount = selectedCorrectIndices.length;
+    const correctCount = correctQuestionIndices.length;
     const score = correctCount / totalQuestions;
 
-    // Determine passing based on quiz passingScore (we'll just use 0.7 as default)
     const passed = score >= 0.7;
 
     const [attempt] = db
@@ -2145,18 +2088,15 @@ This course is still in draft while the cluster examples are rewritten against t
       .returning()
       .all();
 
-    // Build answer selections
     const questionIds = [...new Set(optionIds.map((o) => o.questionId))];
     for (let qi = 0; qi < questionIds.length; qi++) {
       const qId = questionIds[qi];
       const qOptions = optionIds.filter((o) => o.questionId === qId);
       let selectedOption: (typeof qOptions)[0];
 
-      if (selectedCorrectIndices.includes(qi)) {
-        // Pick correct answer
+      if (correctQuestionIndices.includes(qi)) {
         selectedOption = qOptions.find((o) => o.correct)!;
       } else {
-        // Pick wrong answer
         selectedOption = qOptions.find((o) => !o.correct)!;
       }
 
@@ -2170,39 +2110,28 @@ This course is still in draft while the cluster examples are rewritten against t
     }
   }
 
-  // Emma — passed quiz 1 (3/3 correct)
-  recordQuizAttempt(students[0].id, quiz1.id, quiz1OptionIds, [0, 1, 2], 35);
+  recordQuizAttempt(emma.id, quiz1.id, quiz1OptionIds, [0, 1, 2], 35);
 
-  // Emma — passed quiz 2 (2/2 correct)
-  recordQuizAttempt(students[0].id, quiz2.id, quiz2OptionIds, [0, 1], 30);
+  recordQuizAttempt(emma.id, quiz2.id, quiz2OptionIds, [0, 1], 30);
 
-  // Emma — passed quiz 3 (2/3 correct, just barely at 67% with 70% passing = fail, then retake)
-  recordQuizAttempt(students[0].id, quiz3.id, quiz3OptionIds, [0, 2], 28);
-  // Retake — all correct
-  recordQuizAttempt(students[0].id, quiz3.id, quiz3OptionIds, [0, 1, 2], 27);
+  recordQuizAttempt(emma.id, quiz3.id, quiz3OptionIds, [0, 2], 28);
+  recordQuizAttempt(emma.id, quiz3.id, quiz3OptionIds, [0, 1, 2], 27);
 
-  // James — passed quiz 1 (3/3 correct)
-  recordQuizAttempt(students[1].id, quiz1.id, quiz1OptionIds, [0, 1, 2], 40);
+  recordQuizAttempt(james.id, quiz1.id, quiz1OptionIds, [0, 1, 2], 40);
 
-  // James — passed quiz 2 (2/2 correct)
-  recordQuizAttempt(students[1].id, quiz2.id, quiz2OptionIds, [0, 1], 35);
+  recordQuizAttempt(james.id, quiz2.id, quiz2OptionIds, [0, 1], 35);
 
-  // Olivia — failed quiz 1 first attempt (1/3 correct), then passed on retry (3/3)
-  recordQuizAttempt(students[2].id, quiz1.id, quiz1OptionIds, [0], 25);
-  recordQuizAttempt(students[2].id, quiz1.id, quiz1OptionIds, [0, 1, 2], 24);
+  recordQuizAttempt(olivia.id, quiz1.id, quiz1OptionIds, [0], 25);
+  recordQuizAttempt(olivia.id, quiz1.id, quiz1OptionIds, [0, 1, 2], 24);
 
-  // Olivia — passed quiz 3 (3/3 correct)
-  recordQuizAttempt(students[2].id, quiz3.id, quiz3OptionIds, [0, 1, 2], 20);
+  recordQuizAttempt(olivia.id, quiz3.id, quiz3OptionIds, [0, 1, 2], 20);
 
-  // Sophia — failed quiz 1 (1/3 correct, hasn't retaken yet)
-  recordQuizAttempt(students[4].id, quiz1.id, quiz1OptionIds, [1], 10);
+  recordQuizAttempt(sophia.id, quiz1.id, quiz1OptionIds, [1], 10);
 
   console.log(
     `Created ${countRows(schema.quizAttempts)} quiz attempts and ${countRows(schema.quizAnswers)} answers.`
   );
 
-  // ─── Video Watch Events ───
-  //
   // The only event types the player emits are `play`, `pause`, `ended` and
   // `progress` — see app/components/youtube-player.tsx. `progress` is the
   // heartbeat it posts every 10 seconds while the video is playing, so in real
@@ -2231,9 +2160,6 @@ This course is still in draft while the cluster examples are rewritten against t
     });
   }
 
-  // One watch session: `play`, a `progress` heartbeat every 10 seconds of
-  // playback, then `ended` if they reached the end or `pause` if they stopped
-  // short. Clock time advances with playback position, as it does in real life.
   function addWatchSession(
     userId: number,
     lessonId: number,
@@ -2242,7 +2168,6 @@ This course is still in draft while the cluster examples are rewritten against t
     videoDurationSeconds: number,
     startHoursAgo: number
   ) {
-    // Clock time runs backwards from startHoursAgo as playback advances.
     const hoursAgoAt = (position: number) =>
       startHoursAgo - (position - fromSeconds) / 3600;
 
@@ -2266,24 +2191,18 @@ This course is still in draft while the cluster examples are rewritten against t
     );
   }
 
-  // Emma watched course 1 lesson 1 (8 min video) in two sittings.
-  addWatchSession(students[0].id, course1LessonIds[0], 0, 180, 480, 50 * 24);
-  addWatchSession(students[0].id, course1LessonIds[0], 180, 480, 480, 49 * 24);
+  addWatchSession(emma.id, course1LessonIds[0], 0, 180, 480, 50 * 24);
+  addWatchSession(emma.id, course1LessonIds[0], 180, 480, 480, 49 * 24);
 
-  // James watched it straight through.
-  addWatchSession(students[1].id, course1LessonIds[0], 0, 480, 480, 45 * 24);
+  addWatchSession(james.id, course1LessonIds[0], 0, 480, 480, 45 * 24);
 
-  // Liam started course 2 lesson 1 and gave up six minutes in.
-  addWatchSession(students[3].id, course2LessonIds[0], 0, 300, 600, 22 * 24);
-  addWatchSession(students[3].id, course2LessonIds[0], 300, 360, 600, 21 * 24);
-
-  // ─── Purchases ───
-  // Individual purchases for enrolled students
+  addWatchSession(liam.id, course2LessonIds[0], 0, 300, 600, 22 * 24);
+  addWatchSession(liam.id, course2LessonIds[0], 300, 360, 600, 21 * 24);
 
   const [purchase1] = db
     .insert(schema.purchases)
     .values({
-      userId: students[0].id, // Emma — bought course 1 individually
+      userId: emma.id,
       courseId: course1.id,
       amountPaid: 7900,
       country: "US",
@@ -2294,7 +2213,7 @@ This course is still in draft while the cluster examples are rewritten against t
 
   db.insert(schema.purchases)
     .values({
-      userId: students[0].id, // Emma — bought course 2 individually
+      userId: emma.id,
       courseId: course2.id,
       amountPaid: 5999,
       country: "US",
@@ -2304,7 +2223,7 @@ This course is still in draft while the cluster examples are rewritten against t
 
   db.insert(schema.purchases)
     .values({
-      userId: students[1].id, // James — bought course 1 with PPP discount (India)
+      userId: james.id,
       courseId: course1.id,
       amountPaid: 2500,
       country: "IN",
@@ -2314,7 +2233,7 @@ This course is still in draft while the cluster examples are rewritten against t
 
   db.insert(schema.purchases)
     .values({
-      userId: students[2].id, // Olivia — bought course 1 individually
+      userId: olivia.id,
       courseId: course1.id,
       amountPaid: 7900,
       country: "US",
@@ -2324,7 +2243,7 @@ This course is still in draft while the cluster examples are rewritten against t
 
   db.insert(schema.purchases)
     .values({
-      userId: students[4].id, // Sophia — bought course 1 individually
+      userId: sophia.id,
       courseId: course1.id,
       amountPaid: 7900,
       country: "US",
@@ -2333,9 +2252,6 @@ This course is still in draft while the cluster examples are rewritten against t
     .run();
 
   console.log(`Created ${countRows(schema.purchases)} individual purchases.`);
-
-  // ─── Teams, Team Members, and Coupons ───
-  // Bossy McBossface bought 5 team seats for course 2; Olivia and Liam redeemed coupons
 
   const [team1] = db
     .insert(schema.teams)
@@ -2352,7 +2268,6 @@ This course is still in draft while the cluster examples are rewritten against t
     })
     .run();
 
-  // Team purchase by Bossy McBossface for course 2 (5 seats)
   const [teamPurchase] = db
     .insert(schema.purchases)
     .values({
@@ -2365,7 +2280,6 @@ This course is still in draft while the cluster examples are rewritten against t
     .returning()
     .all();
 
-  // Generate 5 coupons for the team purchase
   const couponCodes = [
     "TEAM-NODEJS-A1B2C3",
     "TEAM-NODEJS-D4E5F6",
@@ -2388,10 +2302,8 @@ This course is still in draft while the cluster examples are rewritten against t
     .returning()
     .all();
 
-  // Redeem 2 of the 5 coupons. Redeemers are named by email, not by position in
-  // the students array — position would silently re-point these redemptions at
-  // different people the moment a student is inserted rather than appended.
-  // Both already have an enrolment for course 2 from the enrolments section.
+  // Both redeemers already have an Enrollment on course 2, so redeeming adds
+  // none.
   db.update(schema.coupons)
     .set({
       redeemedByUserId: studentByEmail("olivia.martinez@student.dev").id,
@@ -2412,8 +2324,6 @@ This course is still in draft while the cluster examples are rewritten against t
     `Created 1 team with Bossy McBossface as admin, 1 team purchase, and ${seededCoupons.length} coupons (${countRows(schema.coupons, isNotNull(schema.coupons.redeemedByUserId))} redeemed, ${countRows(schema.coupons, isNull(schema.coupons.redeemedByUserId))} available).`
   );
 
-  // ─── Generated history ───
-  //
   // Everything above is hand-written narrative data: a handful of students whose
   // comments, quiz attempts and ratings are written one by one. Everything below
   // is the bulk history the analytics work is evaluated against — roughly twelve
@@ -2436,8 +2346,6 @@ This course is still in draft while the cluster examples are rewritten against t
       .map((l) => [l.id, (l.durationMinutes ?? 10) * 60] as const)
   );
 
-  // ─── Drop-off cliffs ───
-  //
   // Progress is not spread evenly through a course. Each course has two lessons
   // where a large share of students stop for good, and the analytics work is
   // expected to surface exactly these lessons. They are, by lesson index
@@ -2467,8 +2375,7 @@ This course is still in draft while the cluster examples are rewritten against t
   type SellableCourse = {
     course: typeof course1;
     lessonIds: number[];
-    // [bigCliffIndex, secondCliffIndex] — the lesson a stopping student last
-    // completed.
+    // The lesson a student stopping at each cliff last completed.
     cliffs: [number, number];
   };
 
@@ -2486,7 +2393,6 @@ This course is still in draft while the cluster examples are rewritten against t
   let generatedEnrollments = 0;
   let generatedProgressRows = 0;
 
-  // A student buys, enrols, and works through the course as far as they get.
   // Returns false if there was nothing they could have bought on that day — a
   // course cannot be sold before it was created, and nobody buys twice.
   function buyCourse(
@@ -2570,9 +2476,6 @@ This course is still in draft while the cluster examples are rewritten against t
     buyCourse(longStanding[i % longStanding.length], launchWeekDays[i]);
   }
 
-  // Walks a student through a course as far as they got, leaving the lesson
-  // after their last completed one in progress. Returns the number of rows
-  // written.
   function generateProgress(
     userId: number,
     target: SellableCourse,
@@ -2617,8 +2520,6 @@ This course is still in draft while the cluster examples are rewritten against t
         .run();
       rows++;
 
-      // The lesson they stopped on is left half-watched: a session that never
-      // reached the end, heartbeats and all.
       if (li === stopIndex) {
         const duration = lessonDurationSeconds.get(lessonIds[li]) ?? 600;
         addWatchSession(
@@ -2662,7 +2563,6 @@ This course is still in draft while the cluster examples are rewritten against t
     `Created ${generatedPurchases} generated purchases, ${generatedEnrollments} enrolments and ${generatedProgressRows} lesson progress rows.`
   );
 
-  // ─── Further team purchases ───
   // Two more seat purchases so team revenue is not a single row, in mixed
   // redemption states: one team most of the way through its seats, one that has
   // bought and redeemed nothing yet.
@@ -2718,7 +2618,6 @@ This course is still in draft while the cluster examples are rewritten against t
       .returning()
       .all();
 
-    // Redeemers named by email, for the reason given at the first team above.
     redeemerEmails.forEach((email, i) => {
       const redeemer = studentByEmail(email);
       const redeemedDaysAgo = Math.max(0, purchasedDaysAgo - (i + 1) * 2);
@@ -2779,11 +2678,8 @@ This course is still in draft while the cluster examples are rewritten against t
     []
   );
 
-  // ─── Liam's Refund Request ───
-  // One learner with an Open Refund Request. The dates count back from
-  // today, so the fourteen-day refund window is still open whenever you seed.
+  // The dates count back from today, so the fourteen-day refund window is still open whenever you seed.
 
-  const liam = studentByEmail("liam@example.com");
   const [liamPurchase] = db
     .insert(schema.purchases)
     .values({
@@ -2838,7 +2734,6 @@ This course is still in draft while the cluster examples are rewritten against t
 
   console.log("Created Liam's Refund Request.");
 
-  // ─── Marta's Refund Request ───
   // A Team Licence with no Claimed Seats, so a Platform Admin can approve it.
   // Its Seats are on hold while the request is open.
 
@@ -2853,7 +2748,6 @@ This course is still in draft while the cluster examples are rewritten against t
 
   console.log("Created Marta's Refund Request on her Team Licence.");
 
-  // ─── Flush watch events ───
   // Batched: the heartbeat makes these by far the largest table, and one
   // statement per row would dominate the seed's runtime.
 
@@ -2865,8 +2759,6 @@ This course is still in draft while the cluster examples are rewritten against t
   }
 
   console.log(`Created ${watchEventRows.length} video watch events.`);
-
-  // ─── Summary ───
 
   const sevenDaysAgo = daysAgo(7);
   const oldestPurchase =
@@ -2908,8 +2800,6 @@ This course is still in draft while the cluster examples are rewritten against t
     `  Teams: ${countRows(schema.teams)}, coupons: ${countRows(schema.coupons)} (${countRows(schema.coupons, isNotNull(schema.coupons.redeemedByUserId))} redeemed)`
   );
 
-  // ─── Sync users to Knock ───
-  // Name, email, avatar, and default preferences for anyone without a set.
   if (process.env.KNOCK_SECRET_API_KEY) {
     const synced = await syncAllUsers(db, await defaultNotifications());
     console.log(`  Synced ${synced} users to Knock.`);

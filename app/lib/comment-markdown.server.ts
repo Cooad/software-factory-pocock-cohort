@@ -1,7 +1,6 @@
 import { marked, Renderer } from "marked";
 import { type Highlighter, createHighlighter } from "shiki";
 
-// ─── Comment Rendering ───
 // Deliberately separate from renderMarkdown (~/lib/markdown.server).
 //
 // renderMarkdown handles lesson content and sales copy, which are written by
@@ -9,13 +8,8 @@ import { type Highlighter, createHighlighter } from "shiki";
 // students, so the same treatment would be stored XSS against every reader,
 // including the instructor and any admin who opens the questions queue.
 //
-// This renderer never emits author-supplied HTML:
-//   - raw HTML blocks/tags are escaped and shown as literal text
-//   - link hrefs are restricted to http/https/mailto and get rel="nofollow"
-//   - images are dropped (rendered as their alt text)
-//   - everything else goes through marked's own escaping
-// Output is still injected with dangerouslySetInnerHTML, so any change here
-// needs the same scrutiny.
+// Output is injected with dangerouslySetInnerHTML, so any change here needs
+// security review.
 
 const SAFE_LINK_PROTOCOLS = ["http:", "https:", "mailto:"];
 
@@ -56,11 +50,7 @@ function escapeHtml(value: string): string {
     .replace(/'/g, "&#39;");
 }
 
-/**
- * Returns the href only when it uses a protocol we allow. Anything else —
- * javascript:, data:, vbscript:, or an unparseable URL — returns null so the
- * link is downgraded to plain text.
- */
+/** Null downgrades the link to plain text. */
 function safeHref(href: string | null): string | null {
   if (!href) return null;
 
@@ -93,7 +83,6 @@ export async function renderComment(markdown: string): Promise<string> {
     }
   };
 
-  // Raw HTML is shown as text, never emitted as markup.
   renderer.html = ({ text }) => escapeHtml(text);
 
   renderer.link = function ({ href, title, tokens }) {

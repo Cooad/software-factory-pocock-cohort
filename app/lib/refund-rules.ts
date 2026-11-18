@@ -1,6 +1,5 @@
-// The eligibility rules for a Refund Request. Kept apart from
-// refunds.server.ts so pages can show them without pulling the database into
-// the client bundle.
+// Kept apart from refunds.server.ts so pages can show these rules without
+// pulling the database into the client bundle.
 
 export const REFUND_WINDOW_DAYS = 14;
 export const REFUND_WATCH_LIMIT_SECONDS = 60 * 60;
@@ -12,7 +11,6 @@ export type RuleBreak =
   | "completed_too_much"
   | "seat_claimed";
 
-/** What a Platform Admin sees next to a Refund Request that breaks a rule. */
 export const RULE_BREAK_LABELS: Record<RuleBreak, string> = {
   window_closed: `Raised outside the ${REFUND_WINDOW_DAYS}-day window`,
   watched_too_much: `Watched ${REFUND_WATCH_LIMIT_SECONDS / 3600} hours or more`,

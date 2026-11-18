@@ -1,22 +1,16 @@
-// ─── Analytics Config ───
-// The vocabulary the analytics page and its service share: how much the
-// platform keeps, and the time ranges a viewer can ask for.
-//
 // Imported by both the service and the route, so nothing here may touch the
 // database or the request.
 
 /**
- * The platform's cut of gross revenue. One constant, named once — the page
- * shows gross, fee and net side by side, and they must agree.
+ * One constant, named once — the page shows gross, fee and net side by side,
+ * and they must agree.
  */
 export const PLATFORM_FEE_RATE = 0.2;
 
-/** The same rate as a whole number, for labelling it on screen. */
 export const PLATFORM_FEE_PERCENT = PLATFORM_FEE_RATE * 100;
 
 export type AnalyticsRange = "7d" | "30d" | "90d" | "all";
 
-/** The range control's options, in the order they are offered. */
 export const ANALYTICS_RANGES: { value: AnalyticsRange; label: string }[] = [
   { value: "7d", label: "Last 7 days" },
   { value: "30d", label: "Last 30 days" },
@@ -26,7 +20,6 @@ export const ANALYTICS_RANGES: { value: AnalyticsRange; label: string }[] = [
 
 export const DEFAULT_ANALYTICS_RANGE: AnalyticsRange = "30d";
 
-/** Narrows an untrusted search param — anything else falls back to the default. */
 export function parseAnalyticsRange(value: string | null): AnalyticsRange {
   return ANALYTICS_RANGES.some((range) => range.value === value)
     ? (value as AnalyticsRange)
@@ -40,8 +33,6 @@ const RANGE_DAYS: Record<Exclude<AnalyticsRange, "all">, number> = {
 };
 
 /**
- * The inclusive start of a range, as an ISO timestamp, or null for all time.
- *
  * The boundary is decided in exactly one place: a row landing exactly on the
  * cutoff is inside the range. Lives here rather than in the service because
  * panels built on other services have to agree with it.
@@ -67,9 +58,8 @@ const MONTHS = [
 ];
 
 /**
- * Cents as money — always with the cents shown, and always with a currency
- * symbol. Deliberately not `formatPrice`, which renders 0 as "Free": a day
- * with no sales is $0.00, not free.
+ * Deliberately not `formatPrice`, which renders 0 as "Free": a day with no
+ * sales is $0.00, not free.
  */
 export function formatMoney(cents: number): string {
   return `$${(cents / 100).toLocaleString("en-US", {
@@ -92,8 +82,6 @@ export function formatBucket(bucket: string): string {
 }
 
 /**
- * Splits gross revenue into the platform's fee and the instructor's net.
- *
  * Net is gross minus the rounded fee rather than a second independent
  * rounding, so the three figures always add up on screen.
  */

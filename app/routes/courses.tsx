@@ -294,7 +294,6 @@ export async function loader({ request, url }: Route.LoaderArgs) {
   const currentUserId = await getCurrentUserId(request);
   const country = await resolveCountry(request);
 
-  // Build a map of courseId -> progress for enrolled courses
   const progressMap = new Map<
     number,
     { progress: number; completedLessons: number }
@@ -392,7 +391,6 @@ export default function CourseCatalog({ loaderData }: Route.ComponentProps) {
         </p>
       </div>
 
-      {/* Search and Filter */}
       <Form method="get" className="mb-8 flex flex-col gap-4 sm:flex-row">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -419,7 +417,6 @@ export default function CourseCatalog({ loaderData }: Route.ComponentProps) {
         <Button type="submit">Search</Button>
       </Form>
 
-      {/* Course Grid */}
       {isSearching ? (
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {Array.from({ length: 6 }).map((_, i) => (

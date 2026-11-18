@@ -63,7 +63,6 @@ export async function action({ request, url }: Route.ActionArgs) {
   const redirectTo = url.searchParams.get("redirectTo");
   const destination = redirectTo && redirectTo.startsWith("/") ? redirectTo : "/courses";
 
-  // If email already exists, silently log them in
   const existingUser = db
     .select()
     .from(users)

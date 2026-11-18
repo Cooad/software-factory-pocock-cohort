@@ -10,19 +10,9 @@ import type {
 } from "~/lib/notification-feed";
 import type { NotificationPreferences } from "~/lib/notification-preferences";
 
-// ─── Notifications port ───
-// Cadence's side of sending Notifications (see GLOSSARY.md). Services take a
-// `Notifications` as an injected parameter, like `db` and `now`, so tests hand
-// in `fakeNotifications()` and never reach Knock.
-//
-// Adapters:
-// - `knockNotifications` (notifications.knock.server.ts): the only code that
-//   imports the Knock SDK or knows Knock's workflow, category and channel keys.
-// - `fakeNotifications` (notifications.fake.server.ts): records what was sent.
-// - `loggingNotifications` (below): logs, used when KNOCK_SECRET_API_KEY is
-//   missing. Its feed is empty.
+// Services take a `Notifications` as an injected parameter, like `db` and
+// `now`, so tests hand in `fakeNotifications()` and never reach Knock.
 
-/** Someone a Notification is about or for, as Cadence knows them. */
 export type NotificationPerson = {
   id: number;
   name: string;
@@ -30,7 +20,6 @@ export type NotificationPerson = {
   avatarUrl: string | null;
 };
 
-/** The user's row, as the person Notifications know. */
 export function toNotificationPerson(
   user: NotificationPerson
 ): NotificationPerson {
@@ -42,7 +31,6 @@ export function toNotificationPerson(
   };
 }
 
-/** The user as a Notification recipient or actor, or undefined if missing. */
 export function findNotificationPerson(
   db: BetterSQLite3Database<typeof schema>,
   userId: number
@@ -54,7 +42,6 @@ export function findNotificationPerson(
     .get();
 }
 
-/** The `users` columns that make a NotificationPerson, for `select()`. */
 export const NOTIFICATION_PERSON_COLUMNS = {
   id: users.id,
   name: users.name,
@@ -63,10 +50,9 @@ export const NOTIFICATION_PERSON_COLUMNS = {
 };
 
 /**
- * Every Notification Cadence sends. `kind` names the Notification; its `data`
- * shape lives in notification-feed.ts, shared with the browser, which uses it
- * to write the row's copy and find its click target (`url`). `actor` is who
- * caused it; leave it out for Notifications Cadence sends itself.
+ * The `data` shapes live in notification-feed.ts, shared with the browser,
+ * which uses them to write the row's copy and find its click target (`url`).
+ * Leave `actor` out for Notifications Cadence sends itself.
  */
 export type Notification = {
   [K in NotificationKind]: {
@@ -79,21 +65,16 @@ export type Notification = {
 
 export interface Notifications {
   /**
-   * Sends one Notification. The idempotency key makes a retry with the same
-   * key a no-op, e.g. `discussion-reply:<commentId>`.
+   * The idempotency key makes a retry with the same key a no-op, e.g.
+   * `discussion-reply:<commentId>`.
    */
   send(notification: Notification, idempotencyKey: string): Promise<void>;
 
-  /**
-   * Credentials the browser needs to read `userId`'s Notification Feed live,
-   * or null when there is no feed to read.
-   */
+  /** Null when there is no feed to read. */
   feedCredentials(userId: number): Promise<FeedCredentials | null>;
 
-  /** Creates or updates the person's profile: name, email and avatar. */
   identifyUser(person: NotificationPerson): Promise<void>;
 
-  /** The person's stored preference set, or null when they have none. */
   getPreferences(userId: number): Promise<NotificationPreferences | null>;
 
   /**
@@ -114,11 +95,6 @@ export interface Notifications {
   archiveForComment(commentId: number): Promise<void>;
 }
 
-/**
- * Runs Notifications work that must never break what called it. A failure is
- * logged as `[notifications] <failureMessage>: <error message>` and
- * `fallback` is returned instead.
- */
 export async function tolerateNotificationFailure<T>(
   failureMessage: string,
   fallback: T,
@@ -135,10 +111,7 @@ export async function tolerateNotificationFailure<T>(
   }
 }
 
-/**
- * Archives the Notifications a comment caused without ever throwing: a
- * failure is logged, so deleting the comment still succeeds.
- */
+/** Deleting the comment must still succeed when archiving fails. */
 export async function archiveForCommentSafely(
   notifications: Notifications,
   commentId: number
@@ -151,8 +124,8 @@ export async function archiveForCommentSafely(
 }
 
 /**
- * Sends a Notification without ever throwing: a failure is logged, so the
- * action that caused it (posting a comment, enrolling, …) still succeeds.
+ * The action that caused the Notification (posting a comment, enrolling, …)
+ * must still succeed when sending fails.
  */
 export async function sendSafely(
   notifications: Notifications,
@@ -202,9 +175,8 @@ export function loggingNotifications(): Notifications {
 let appNotifications: Notifications | undefined;
 
 /**
- * The adapter the running app uses, resolved on first call (never at import,
- * so tests that inject a fake never load `.env` or reach Knock). Knock when
- * KNOCK_SECRET_API_KEY is set, logging otherwise.
+ * Resolved on first call, never at import, so tests that inject a fake never
+ * load `.env` or reach Knock.
  */
 export async function defaultNotifications(): Promise<Notifications> {
   if (!appNotifications) appNotifications = await chooseNotifications();

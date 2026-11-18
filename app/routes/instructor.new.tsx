@@ -153,7 +153,6 @@ export default function InstructorNewCourse({
 
   return (
     <div className="mx-auto max-w-7xl p-6 lg:p-8">
-      {/* Breadcrumb */}
       <nav className="mb-6 text-sm text-muted-foreground">
         <Link to="/instructor" className="hover:text-foreground">
           My Courses
@@ -183,7 +182,6 @@ export default function InstructorNewCourse({
         </CardHeader>
         <CardContent>
           <fetcher.Form method="post" className="space-y-6">
-            {/* Title */}
             <div className="space-y-2">
               <Label htmlFor="title">Title</Label>
               <Input
@@ -200,7 +198,6 @@ export default function InstructorNewCourse({
               </p>
             </div>
 
-            {/* Description */}
             <div className="space-y-2">
               <Label htmlFor="description">Description</Label>
               <Textarea
@@ -215,7 +212,6 @@ export default function InstructorNewCourse({
               )}
             </div>
 
-            {/* Sales Copy */}
             <div className="space-y-2">
               <Label htmlFor="salesCopy">Sales Copy</Label>
               <Textarea
@@ -234,7 +230,6 @@ export default function InstructorNewCourse({
               </p>
             </div>
 
-            {/* Category */}
             <div className="space-y-2">
               <Label htmlFor="categoryId">Category</Label>
               <input type="hidden" name="categoryId" value={selectedCategory} />
@@ -261,7 +256,6 @@ export default function InstructorNewCourse({
               )}
             </div>
 
-            {/* Cover Image URL */}
             <div className="space-y-2">
               <Label htmlFor="coverImageUrl">
                 Cover Image URL{" "}
@@ -277,7 +271,6 @@ export default function InstructorNewCourse({
               />
             </div>
 
-            {/* Submit */}
             <div className="flex items-center gap-3">
               <Button type="submit" disabled={isSubmitting}>
                 {isSubmitting ? "Creating..." : "Create Course"}

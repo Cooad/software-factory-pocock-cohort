@@ -97,7 +97,6 @@ export async function loader({ request }: Route.LoaderArgs) {
 
   const allCoupons = getCouponsForTeam(team.id);
 
-  // Build per-course stats
   const courseMap = new Map<
     number,
     {
@@ -140,7 +139,6 @@ export async function loader({ request }: Route.LoaderArgs) {
     })
   );
 
-  // Build coupon rows with redeemer email
   const couponRows: CouponRow[] = allCoupons.map((coupon) => {
     let redeemedByEmail: string | null = null;
     if (coupon.redeemedByUserId !== null) {
@@ -222,7 +220,6 @@ export default function Team({ loaderData }: Route.ComponentProps) {
         </p>
       </div>
 
-      {/* Per-course stats */}
       {courseStats.length > 0 && (
         <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {courseStats.map((stat) => (
@@ -270,7 +267,6 @@ export default function Team({ loaderData }: Route.ComponentProps) {
         </div>
       )}
 
-      {/* Coupon list */}
       <div>
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-semibold">Coupons</h2>

@@ -293,7 +293,6 @@ export default function InstructorLessonEditor({
 
   return (
     <div className="mx-auto max-w-7xl p-6 lg:p-8">
-      {/* Unsaved changes blocker dialog */}
       {blocker.state === "blocked" && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <Card className="mx-4 w-full max-w-md">
@@ -316,7 +315,6 @@ export default function InstructorLessonEditor({
         </div>
       )}
 
-      {/* Breadcrumb */}
       <nav className="mb-6 text-sm text-muted-foreground">
         <Link to="/instructor" className="hover:text-foreground">
           My Courses
@@ -353,7 +351,6 @@ export default function InstructorLessonEditor({
       </div>
 
       <div className="space-y-6">
-        {/* Content */}
         <Card>
           <CardHeader>
             <h2 className="text-lg font-semibold">Lesson Content</h2>
@@ -370,7 +367,6 @@ export default function InstructorLessonEditor({
           </CardContent>
         </Card>
 
-        {/* Video URL */}
         <Card>
           <CardHeader>
             <h2 className="text-lg font-semibold">Video</h2>
@@ -392,7 +388,6 @@ export default function InstructorLessonEditor({
           </CardContent>
         </Card>
 
-        {/* Duration */}
         <Card>
           <CardHeader>
             <h2 className="text-lg font-semibold">Duration</h2>
@@ -416,7 +411,6 @@ export default function InstructorLessonEditor({
           </CardContent>
         </Card>
 
-        {/* GitHub Repo */}
         <Card>
           <CardHeader>
             <h2 className="text-lg font-semibold">GitHub Repository</h2>
@@ -438,7 +432,6 @@ export default function InstructorLessonEditor({
           </CardContent>
         </Card>
 
-        {/* Quiz */}
         <Card>
           <CardHeader>
             <h2 className="text-lg font-semibold">Quiz</h2>
@@ -458,7 +451,6 @@ export default function InstructorLessonEditor({
           </CardContent>
         </Card>
 
-        {/* Save Button */}
         <div className="flex items-center gap-4">
           <Button
             onClick={handleSave}

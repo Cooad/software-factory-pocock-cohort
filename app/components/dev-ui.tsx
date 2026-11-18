@@ -131,7 +131,6 @@ export function DevUI({ users, currentUser, devCountry, countryTierInfo, countri
           )}
         </div>
 
-        {/* Country Override (PPP) */}
         <div className="mt-3 border-t border-dashed pt-3">
           <div className="mb-2 flex items-center gap-1.5 text-xs text-muted-foreground">
             <Globe className="size-3" />

@@ -66,7 +66,6 @@ import { Skeleton } from "~/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "~/components/ui/tabs";
 import { AlertTriangle, Rocket } from "lucide-react";
 
-// ─── Instructor Analytics ───
 // What an instructor earned, and when. Three money figures rather than one:
 // a lone number here gets read as "what I get paid", and the platform's 20%
 // cut makes that reading wrong.
@@ -78,7 +77,6 @@ import { AlertTriangle, Rocket } from "lucide-react";
 // Admins additionally get an instructor picker. With none picked the service
 // receives a null instructor, meaning platform-wide.
 
-// "course" is the second tab; anything else falls back to the overview.
 type AnalyticsTab = "overview" | "course";
 
 const chartConfig = {
@@ -93,7 +91,6 @@ export function meta() {
   ];
 }
 
-/** A search param that should be a row id, or null if it isn't one. */
 function parseId(value: string | null): number | null {
   const id = Number(value);
   return value !== null && Number.isInteger(id) && id > 0 ? id : null;
@@ -249,7 +246,6 @@ function getStudentRevenue(
 
   const studentIds = students.map((student) => student.userId);
 
-  // Correlated: did this purchase mint seats for other people?
   const mintedSeats = db
     .select({ one: sql`1` })
     .from(coupons)
@@ -402,12 +398,10 @@ function getRatingSummary(
   return { average: Math.round(row.average * 10) / 10, count: row.count };
 }
 
-/** The bucket an ISO timestamp falls in, at the given granularity. */
 function bucketOf(iso: string, granularity: "day" | "month"): string {
   return iso.slice(0, granularity === "day" ? 10 : 7);
 }
 
-/** Every bucket from `first` to `last` inclusive, with none skipped. */
 function bucketRange(
   first: string,
   last: string,
@@ -473,7 +467,6 @@ function getRevenueOverTime(
   return { granularity, points };
 }
 
-/** Every lesson of a course, as a subquery for the progress joins. */
 function courseLessonIds(courseId: number) {
   return db
     .select({ id: lessons.id })
@@ -536,7 +529,6 @@ function getCourseProgressSummary(courseId: number): CourseProgressSummary {
   };
 }
 
-/** A lesson a student has opened counts as reached; one they haven't doesn't. */
 const REACHED_STATUSES = [
   LessonProgressStatus.InProgress,
   LessonProgressStatus.Completed,
@@ -670,8 +662,6 @@ function getCourseQuizPassRates(
 
   const quizIds = quizRows.map((quiz) => quiz.quizId);
 
-  // One row per student per quiz, holding the best they managed.
-  //
   // `passed` and `score` are selected bare beside `max(score)`: SQLite answers
   // those from the very row the maximum came from, which is how the best
   // attempt's own recorded verdict is read rather than a fresh comparison.
@@ -825,15 +815,11 @@ export async function loader({ request, url }: Route.LoaderArgs) {
     ? requestedCourseId
     : null;
 
-  // Unanswered questions. A question qualifies when it is top-level, not
-  // deleted, not written by staff, and has no reply from the course's
-  // instructor or an admin.
   const questionsSince = rangeStart(range);
   const questionAuthor = alias(users, "author");
   const reply = alias(comments, "reply");
   const replyAuthor = alias(users, "reply_author");
 
-  // Correlated: matches a live reply, by staff, to the outer question.
   const staffReply = db
     .select({ one: sql`1` })
     .from(reply)
@@ -885,7 +871,6 @@ export async function loader({ request, url }: Route.LoaderArgs) {
     older: (questionRow?.total ?? 0) - questionsInRange,
   };
 
-  // Gross revenue, the platform's fee and the instructor's net for the range.
   const summaryRow = db
     .select({
       gross: sum(purchases.amountPaid),
@@ -902,8 +887,7 @@ export async function loader({ request, url }: Route.LoaderArgs) {
     purchaseCount: summaryRow?.purchaseCount ?? 0,
   };
 
-  // Revenue broken down by course, biggest earner first. Courses with no sales
-  // in the range are absent rather than listed at zero.
+  // Courses with no sales in the range are absent rather than listed at zero.
   const courseRevenueRows = db
     .select({
       courseId: courses.id,
@@ -951,7 +935,6 @@ export async function loader({ request, url }: Route.LoaderArgs) {
         : Math.round(attributedRevenue / students.length),
   };
 
-  // Everyone who owns at least one course, for the admin's instructor picker.
   // Owners rather than users with the instructor role: an admin who owns a
   // course contributes to the platform-wide total.
   const instructors = isAdmin
@@ -1050,8 +1033,6 @@ function MoneyCard({
 }
 
 /**
- * A single figure with its own empty copy.
- *
  * Every panel says what it means when it has nothing, so an instructor can
  * tell "nothing has happened yet" from "this is broken".
  */
@@ -1220,7 +1201,6 @@ function RevenueChart({ series }: { series: RevenueSeries }) {
   );
 }
 
-/** The two completion figures, side by side and deliberately not merged. */
 function CourseProgress({ progress }: { progress: CourseProgressSummary }) {
   return (
     <div className="grid gap-4 sm:grid-cols-2">
@@ -1271,7 +1251,6 @@ function CourseProgress({ progress }: { progress: CourseProgressSummary }) {
   );
 }
 
-/** One lesson's bar, sized against the enrolled count. */
 function FunnelRow({
   lesson,
   enrolledCount,
@@ -1352,8 +1331,6 @@ function DropOffFunnel({ funnel }: { funnel: CourseFunnel }) {
 }
 
 /**
- * How each quiz is going, one row apiece.
- *
  * The basis is spelled out above the table rather than left implied: retakes
  * are allowed, so "pass rate" has more than one defensible meaning and the
  * reader cannot tell which one they are looking at from the number alone.
@@ -1421,7 +1398,6 @@ function QuizPassRates({ quizzes }: { quizzes: QuizPassRate[] }) {
   );
 }
 
-/** Where a course's buyers are, and what parity pricing costs the seller. */
 function RevenueByCountry({ breakdown }: { breakdown: CourseCountryRevenue }) {
   if (breakdown.rows.length === 0) {
     return (
@@ -1526,7 +1502,6 @@ export default function InstructorAnalytics({
 
   const [searchParams, setSearchParams] = useSearchParams();
 
-  // Every control writes one param and leaves the rest of the view intact.
   function setParam(key: string, value: string | null) {
     const next = new URLSearchParams(searchParams);
     if (value === null) {

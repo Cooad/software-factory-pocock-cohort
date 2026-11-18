@@ -1,7 +1,5 @@
-// ─── Notification preferences ───
-// Which Notification categories reach a person, per channel. Shared by the
-// server and the /settings Notifications card. Only the feed channel is used
-// in v1. Knock's keys for these live in the Knock adapter, not here.
+// Only the feed channel is used in v1. Knock's keys for these live in the
+// Knock adapter, not here.
 
 export const NOTIFICATION_CATEGORIES = [
   "refundRequestUpdates",
@@ -19,17 +17,15 @@ export const NOTIFICATION_CHANNELS = ["feed"] as const;
 export type NotificationChannel = (typeof NOTIFICATION_CHANNELS)[number];
 
 /**
- * A person's preference set, category × channel. A missing category or
- * channel means the person (or Knock) has no stored choice for it.
+ * A missing category or channel means the person (or Knock) has no stored
+ * choice for it.
  */
 export type NotificationPreferences = {
   [C in NotificationCategory]?: { [Ch in NotificationChannel]?: boolean };
 };
 
-/** Each category's feed switch, with defaults filled in. */
 export type FeedPreferences = Record<NotificationCategory, boolean>;
 
-/** What every user starts with: Enrollments off, everything else on. */
 export const DEFAULT_FEED_PREFERENCES: FeedPreferences = {
   refundRequestUpdates: true,
   seatClaims: true,

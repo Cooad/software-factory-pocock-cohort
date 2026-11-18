@@ -181,7 +181,6 @@ export async function loader({ params, request }: Route.LoaderArgs) {
     throw data("Module not found", { status: 404 });
   }
 
-  // Verify module belongs to this course
   if (moduleWithLessons.courseId !== course.id) {
     throw data("Module not found in this course", { status: 404 });
   }
@@ -205,7 +204,6 @@ export async function loader({ params, request }: Route.LoaderArgs) {
     }
   }
 
-  // Calculate module-level progress
   const totalLessons = moduleWithLessons.lessons.length;
   const completedLessons = moduleWithLessons.lessons.filter(
     (l) => lessonProgressMap[l.id] === LessonProgressStatus.Completed
@@ -279,7 +277,6 @@ export default function ModuleDetail({ loaderData }: Route.ComponentProps) {
 
   return (
     <div className="mx-auto max-w-4xl p-6 lg:p-8">
-      {/* Breadcrumb */}
       <nav className="mb-6 text-sm text-muted-foreground">
         <Link to="/courses" className="hover:text-foreground">
           Courses
@@ -292,7 +289,6 @@ export default function ModuleDetail({ loaderData }: Route.ComponentProps) {
         <span className="text-foreground">{mod.title}</span>
       </nav>
 
-      {/* Module title and stats */}
       <h1 className="mb-2 text-3xl font-bold">{mod.title}</h1>
       <div className="mb-6 flex items-center gap-4 text-sm text-muted-foreground">
         <span className="flex items-center gap-1">
@@ -307,7 +303,6 @@ export default function ModuleDetail({ loaderData }: Route.ComponentProps) {
         )}
       </div>
 
-      {/* Progress bar for enrolled students */}
       {enrolled && totalLessons > 0 && (
         <div className="mb-6">
           <div className="mb-1 flex items-center justify-between text-sm">
@@ -325,7 +320,6 @@ export default function ModuleDetail({ loaderData }: Route.ComponentProps) {
         </div>
       )}
 
-      {/* Instructor card */}
       <Card className="mb-8">
         <CardContent className="p-4">
           <div className="flex items-center gap-3">
@@ -346,7 +340,6 @@ export default function ModuleDetail({ loaderData }: Route.ComponentProps) {
         </CardContent>
       </Card>
 
-      {/* Lesson list */}
       <h2 className="mb-4 text-xl font-semibold">Lessons</h2>
       {mod.lessons.length === 0 ? (
         <p className="text-muted-foreground">
