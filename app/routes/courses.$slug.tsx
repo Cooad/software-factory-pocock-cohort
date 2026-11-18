@@ -5,13 +5,13 @@ import { z } from "zod";
 import type { Route } from "./+types/courses.$slug";
 import { getCurrentUserId } from "~/lib/session";
 import { db } from "~/db";
+import { isEnrolled } from "~/lib/enrollments.server";
 import {
   courses,
   categories,
   users,
   modules,
   lessons,
-  enrollments,
   lessonProgress,
   courseRatings,
   LessonProgressStatus,
@@ -130,17 +130,6 @@ function getLessonCountForCourse(courseId: number) {
     .get();
 
   return count?.count ?? 0;
-}
-
-function isUserEnrolled(userId: number, courseId: number) {
-  const enrollment = db
-    .select()
-    .from(enrollments)
-    .where(
-      and(eq(enrollments.userId, userId), eq(enrollments.courseId, courseId))
-    )
-    .get();
-  return !!enrollment;
 }
 
 function getCourseLessonIds(courseId: number): number[] {
@@ -397,7 +386,7 @@ export async function loader({ params, request }: Route.LoaderArgs) {
   let refundOffer: RefundOffer | null = null;
 
   if (currentUserId) {
-    enrolled = isUserEnrolled(currentUserId, course.id);
+    enrolled = isEnrolled(db, currentUserId, course.id);
 
     if (enrolled) {
       refundOffer = getRefundOffer(db, currentUserId, course.id, new Date());
@@ -462,7 +451,7 @@ export async function action({ params, request }: Route.ActionArgs) {
     throw data("Course not found", { status: 404 });
   }
 
-  if (!isUserEnrolled(currentUserId, course.id)) {
+  if (!isEnrolled(db, currentUserId, course.id)) {
     throw data("You must be enrolled in this course to rate it.", {
       status: 403,
     });
