@@ -11,6 +11,7 @@ import { isEnrolled } from "~/lib/enrollments.server";
 import { defaultNotifications } from "~/lib/notifications.server";
 import {
   claimSeat,
+  getSeatByCode,
   SEAT_ON_HOLD,
   SEAT_REFUNDED,
 } from "~/lib/seat-claims.server";
@@ -19,15 +20,11 @@ import { Button } from "~/components/ui/button";
 import { Ticket, AlertCircle, CheckCircle2, Globe } from "lucide-react";
 import { data } from "react-router";
 import { db } from "~/db";
-import { purchases, coupons, courses } from "~/db/schema";
+import { purchases, courses } from "~/db/schema";
 import { eq } from "drizzle-orm";
 
 function getCourseById(id: number) {
   return db.select().from(courses).where(eq(courses.id, id)).get();
-}
-
-function getCouponByCode(code: string) {
-  return db.select().from(coupons).where(eq(coupons.code, code)).get();
 }
 
 const redeemParamsSchema = z.object({
@@ -49,7 +46,7 @@ export function meta({ loaderData }: Route.MetaArgs) {
 export async function loader({ params, request }: Route.LoaderArgs) {
   const { code } = parseParams(params, redeemParamsSchema);
 
-  const coupon = getCouponByCode(code);
+  const coupon = getSeatByCode(db, code);
   if (!coupon) {
     throw data("Coupon not found.", { status: 404 });
   }

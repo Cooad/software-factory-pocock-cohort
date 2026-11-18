@@ -1,6 +1,12 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { createTestDb, seedBaseData } from "~/test/setup";
-import * as schema from "~/db/schema";
+import {
+  createTestDb,
+  createUserWithRole,
+  seedBaseData,
+} from "~/test/setup";
+import { UserRole } from "~/db/schema";
+import { createLesson, createModule } from "./course-content.server";
+import { createStudent } from "./users.server";
 import { createComment, deleteComment, editComment } from "./comments.server";
 import {
   fakeNotifications,
@@ -24,18 +30,8 @@ beforeEach(() => {
   db = createTestDb();
   base = seedBaseData(db);
 
-  const module = db
-    .insert(schema.modules)
-    .values({ courseId: base.course.id, title: "Basics", position: 1 })
-    .returning()
-    .get();
-  moduleId = module.id;
-
-  lessonId = db
-    .insert(schema.lessons)
-    .values({ moduleId: module.id, title: "Lesson 1", position: 1 })
-    .returning()
-    .get().id;
+  moduleId = createModule(db, base.course.id, "Basics").id;
+  lessonId = createLesson(db, moduleId, "Lesson 1").id;
 });
 
 describe("creating a comment", () => {
@@ -158,11 +154,7 @@ describe("creating a comment", () => {
   });
 
   it("refuses a reply to a comment on a different lesson", async () => {
-    const otherLessonId = db
-      .insert(schema.lessons)
-      .values({ moduleId: moduleId, title: "Lesson 2", position: 2 })
-      .returning()
-      .get().id;
+    const otherLessonId = createLesson(db, moduleId, "Lesson 2").id;
     const question = await post(null, otherLessonId);
 
     expect(
@@ -230,7 +222,7 @@ describe("the Discussion Reply Notification", () => {
 
   it("tells only the question's author, not others in the thread", async () => {
     const question = await post(null);
-    const ben = addLearner("Ben");
+    const ben = createStudent(db, "Ben", "ben@example.com");
     await postAs(ben.id, question.id, "Same question here.");
     notifications.sent.length = 0;
 
@@ -315,15 +307,12 @@ describe("the Discussion Question Notification", () => {
   });
 
   it("tells the Instructor when a Platform Admin asks", async () => {
-    const admin = db
-      .insert(schema.users)
-      .values({
-        name: "Ada Admin",
-        email: "ada@example.com",
-        role: schema.UserRole.Admin,
-      })
-      .returning()
-      .get();
+    const admin = createUserWithRole(
+      db,
+      "Ada Admin",
+      "ada@example.com",
+      UserRole.Admin
+    );
 
     await postAs(admin.id, null, "Is this lesson up to date?");
 
@@ -342,7 +331,7 @@ describe("the Discussion Question Notification", () => {
     const question = await post(null);
     notifications.sent.length = 0;
 
-    await postAs(addLearner("Ben").id, question.id, "Same question here.");
+    await postAs(createStudent(db, "Ben", "ben@example.com").id, question.id, "Same question here.");
 
     expect(sentOf("discussion-question")).toEqual([]);
   });
@@ -391,15 +380,7 @@ describe("deleting a comment", () => {
 
   it("refuses anyone else who is not staff", async () => {
     const question = await post(null);
-    const otherStudent = db
-      .insert(schema.users)
-      .values({
-        name: "Ben",
-        email: "ben@example.com",
-        role: schema.UserRole.Student,
-      })
-      .returning()
-      .get();
+    const otherStudent = createStudent(db, "Ben", "ben@example.com");
 
     expect(
       await deleteComment(
@@ -513,7 +494,7 @@ describe("deleting a comment's Notifications", () => {
     await deleteComment(
       db,
       question.id,
-      addLearner("Ben").id,
+      createStudent(db, "Ben", "ben@example.com").id,
       false,
       NOW,
       notifications
@@ -632,18 +613,6 @@ async function postAs(authorId: number, parentId: number | null, body: string) {
   );
   if (!result.ok) throw new Error(result.error);
   return result.comment;
-}
-
-function addLearner(name: string) {
-  return db
-    .insert(schema.users)
-    .values({
-      name,
-      email: `${name.toLowerCase()}@example.com`,
-      role: schema.UserRole.Student,
-    })
-    .returning()
-    .get();
 }
 
 function sentOf<K extends NotificationKind>(kind: K) {
