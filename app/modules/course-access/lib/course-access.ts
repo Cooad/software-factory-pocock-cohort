@@ -18,7 +18,7 @@ export type Db = BetterSQLite3Database<typeof schema>;
 export type Viewer = { userId: number | null; country: string | null };
 
 export type CourseAccessDecision =
-  | { kind: "allowed"; via: "manage" | "enrollment" }
+  | { kind: "allowed"; via: "manage" | "enrollment"; userId: number }
   | { kind: "signed-out" }
   | { kind: "not-enrolled" }
   | {
@@ -56,6 +56,13 @@ function getPerson(db: Db, viewer: Viewer) {
 
 function managesCourse(person: PersonRow, course: Course) {
   return person.role === UserRole.Admin || course.instructorId === person.id;
+}
+
+function canManageWith(
+  person: PersonRow | undefined,
+  course: Course | undefined
+) {
+  return !!person && !!course && managesCourse(person, course);
 }
 
 /**
@@ -131,17 +138,16 @@ function regionLockedBy(
   return locking[locking.length - 1];
 }
 
-export function decide(
+function decideFor(
   db: Db,
   viewer: Viewer,
-  courseId: number
+  course: Course | undefined,
+  person: PersonRow | undefined
 ): CourseAccessDecision {
-  const course = getCourse(db, courseId);
   if (!course) return { kind: "course-not-found" };
-  const person = getPerson(db, viewer);
   if (!person) return { kind: "signed-out" };
   if (managesCourse(person, course)) {
-    return { kind: "allowed", via: "manage" };
+    return { kind: "allowed", via: "manage", userId: person.id };
   }
   if (!isEnrolled(db, person.id, course.id)) return { kind: "not-enrolled" };
 
@@ -153,13 +159,33 @@ export function decide(
       currentCountry: viewer.country,
     };
   }
-  return { kind: "allowed", via: "enrollment" };
+  return { kind: "allowed", via: "enrollment", userId: person.id };
+}
+
+export function decide(
+  db: Db,
+  viewer: Viewer,
+  courseId: number
+): CourseAccessDecision {
+  return decideFor(db, viewer, getCourse(db, courseId), getPerson(db, viewer));
 }
 
 export function canManage(db: Db, viewer: Viewer, courseId: number) {
-  const person = getPerson(db, viewer);
+  return canManageWith(getPerson(db, viewer), getCourse(db, courseId));
+}
+
+/** `decide` and `canManage` together, reading the person and course once. */
+export function assess(
+  db: Db,
+  viewer: Viewer,
+  courseId: number
+): { decision: CourseAccessDecision; canManage: boolean } {
   const course = getCourse(db, courseId);
-  return !!person && !!course && managesCourse(person, course);
+  const person = getPerson(db, viewer);
+  return {
+    decision: decideFor(db, viewer, course, person),
+    canManage: canManageWith(person, course),
+  };
 }
 
 export type Person = {

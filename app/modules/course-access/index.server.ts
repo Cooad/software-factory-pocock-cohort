@@ -1,5 +1,6 @@
 import { db } from "~/db";
 import {
+  assess,
   canManage,
   decide,
   findPerson,
@@ -28,6 +29,10 @@ export function createCourseAccess(database: Db) {
     /** The owning Instructor or a Platform Admin. False for a missing course. */
     canManage(viewer: Viewer, courseId: number) {
       return canManage(database, viewer, courseId);
+    },
+    /** `decide` and `canManage` at once, for a caller that needs both. */
+    assess(viewer: Viewer, courseId: number) {
+      return assess(database, viewer, courseId);
     },
     /** The signed-in person and their role, or null when signed out. */
     findPerson(viewer: Viewer) {
