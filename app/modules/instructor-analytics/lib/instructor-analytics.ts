@@ -52,7 +52,7 @@ import { calendarDay, lastDayOfWindow } from "~/lib/refunds.server";
 
 export type Db = BetterSQLite3Database<typeof schema>;
 
-export type AnalyticsViewer = { userId: number; isAdmin: boolean };
+export type AnalyticsViewer = { userId: number; isPlatformAdmin: boolean };
 
 // "course" is the second tab; anything else falls back to the overview.
 export type AnalyticsTab = "overview" | "course";
@@ -813,7 +813,7 @@ export type RefundExposure = {
  */
 export function getInstructorAnalytics(
   db: Db,
-  { userId, isAdmin }: AnalyticsViewer,
+  { userId, isPlatformAdmin }: AnalyticsViewer,
   params: URLSearchParams,
   now: Date
 ) {
@@ -823,7 +823,9 @@ export function getInstructorAnalytics(
 
   // Instructors are pinned to their own figures; only an admin may look
   // elsewhere, and null means "every instructor".
-  const instructorId = isAdmin ? parseId(params.get("instructor")) : userId;
+  const instructorId = isPlatformAdmin
+    ? parseId(params.get("instructor"))
+    : userId;
 
   // The selector lists every course the viewer owns rather than only the ones
   // that sold: a course nobody is finishing is exactly what this tab is for.
@@ -972,7 +974,7 @@ export function getInstructorAnalytics(
   // Everyone who owns at least one course, for the admin's instructor picker.
   // Owners rather than users with the instructor role: an admin who owns a
   // course contributes to the platform-wide total.
-  const instructors = isAdmin
+  const instructors = isPlatformAdmin
     ? db
         .selectDistinct({ id: users.id, name: users.name })
         .from(courses)
@@ -1074,7 +1076,7 @@ export function getInstructorAnalytics(
     ratings: getRatingSummary(db, instructorId, range, now),
     tab,
     range,
-    isAdmin,
+    isPlatformAdmin,
     instructorId,
     selectedCourseId,
     summary,

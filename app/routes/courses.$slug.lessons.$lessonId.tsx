@@ -115,7 +115,7 @@ type CommentAuthor = {
   name: string;
   avatarUrl: string | null;
   isInstructor: boolean;
-  isAdmin: boolean;
+  isPlatformAdmin: boolean;
 };
 
 type ThreadComment = {
@@ -403,7 +403,7 @@ function getLessonThread(lessonId: number): ThreadComment[] {
         name: row.authorName,
         avatarUrl: row.authorAvatarUrl,
         isInstructor: row.authorId === course.instructorId,
-        isAdmin: row.authorRole === UserRole.Admin,
+        isPlatformAdmin: row.authorRole === UserRole.Admin,
       },
       replies: [],
     };
