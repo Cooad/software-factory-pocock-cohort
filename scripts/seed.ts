@@ -2070,6 +2070,53 @@ This course is still in draft while the cluster examples are rewritten against t
 
   console.log(`Created ${countRows(schema.lessonProgress)} lesson progress records.`);
 
+  // ─── Bookmarks and Notes ───
+  // Private to each Student. Emma has a few of each so the Saved page has
+  // something to show; Olivia has one of each to prove rows stay per-Student.
+
+  function bookmark(userId: number, lessonId: number, daysAgoCreated: number) {
+    db.insert(schema.bookmarks)
+      .values({ userId, lessonId, createdAt: daysAgo(daysAgoCreated) })
+      .run();
+  }
+
+  function note(
+    userId: number,
+    lessonId: number,
+    body: string,
+    daysAgoCreated: number,
+    daysAgoEdited: number
+  ) {
+    db.insert(schema.notes)
+      .values({
+        userId,
+        lessonId,
+        body,
+        createdAt: daysAgo(daysAgoCreated),
+        updatedAt: daysAgo(daysAgoEdited),
+      })
+      .run();
+  }
+
+  bookmark(students[0].id, course1LessonIds[4], 44);
+  bookmark(students[0].id, course1LessonIds[12], 38);
+  bookmark(students[0].id, course2LessonIds[3], 36);
+  note(
+    students[0].id,
+    course1LessonIds[4],
+    "Rewatch the part about generics.\n# and * should show exactly as typed.",
+    45,
+    20
+  );
+  note(students[0].id, course2LessonIds[2], "Try this on the side project.", 37, 37);
+
+  bookmark(students[2].id, course1LessonIds[1], 29);
+  note(students[2].id, course1LessonIds[2], "Confusing — ask in the discussion?", 28, 27);
+
+  console.log(
+    `Created ${countRows(schema.bookmarks)} bookmarks and ${countRows(schema.notes)} notes.`
+  );
+
   // ─── Quiz Attempts ───
 
   // Helper to record a quiz attempt with answers
