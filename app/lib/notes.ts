@@ -1,6 +1,5 @@
 import { z } from "zod";
 
-// A Note is plain text, trimmed, and capped on write. See GLOSSARY.md.
 export const MAX_NOTE_LENGTH = 2000;
 
 export const noteBodySchema = z

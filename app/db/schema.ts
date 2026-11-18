@@ -404,7 +404,6 @@ export const notes = sqliteTable(
     lessonId: integer("lesson_id")
       .notNull()
       .references(() => lessons.id),
-    // Plain text, capped on write. Never rendered as Markdown.
     body: text("body").notNull(),
     createdAt: text("created_at")
       .notNull()

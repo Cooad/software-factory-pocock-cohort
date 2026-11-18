@@ -3,12 +3,6 @@ import { and, desc, eq } from "drizzle-orm";
 import * as schema from "~/db/schema";
 import { bookmarks, courses, lessons, modules } from "~/db/schema";
 
-// ─── Bookmarks ───
-// A Student's flag on a Lesson, so they can find it again. See GLOSSARY.md.
-//
-// Every function takes the database first, so tests can hand in an in-memory
-// one. Content access is checked by the caller (the Lesson page action).
-
 export type Db = BetterSQLite3Database<typeof schema>;
 
 function findBookmark(db: Db, studentId: number, lessonId: number) {
@@ -25,11 +19,6 @@ export function isBookmarked(db: Db, studentId: number, lessonId: number) {
   return !!findBookmark(db, studentId, lessonId);
 }
 
-/**
- * Adds the Bookmark if the Lesson has none, removes it if it has one, and
- * returns whether the Lesson is now bookmarked. The unique index on
- * (Student, Lesson) means a racing second insert is a no-op, not a duplicate.
- */
 export function toggleBookmark(
   db: Db,
   studentId: number,
@@ -50,7 +39,6 @@ export function toggleBookmark(
   return true;
 }
 
-/** The Student's Bookmarks, newest first, each with its Lesson and Course. */
 export function listBookmarks(db: Db, studentId: number) {
   return db
     .select({

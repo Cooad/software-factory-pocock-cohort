@@ -701,8 +701,6 @@ export async function loader({ params, request }: Route.LoaderArgs) {
     ? await renderThread(getLessonThread(lessonId))
     : [];
 
-  // The Student's own Bookmark and Note on this lesson, behind the same bar as
-  // the discussion. A signed-out visitor gets neither.
   const studentId = canViewContent ? currentUserId : null;
   const bookmarked = studentId ? isBookmarked(db, studentId, lessonId) : false;
   const note = studentId ? (getNote(db, studentId, lessonId) ?? null) : null;
@@ -900,8 +898,6 @@ export async function action({ params, request }: Route.ActionArgs) {
     }
   }
 
-  // Bookmark and Note intents re-check access here too, against the same bar
-  // as the discussion, and only for a lesson that belongs to this course.
   if (intent === "toggle-bookmark" || intent === "save-note") {
     await requireContentAccess(request, course.id);
 
@@ -1154,7 +1150,6 @@ export default function LessonViewer({ loaderData }: Route.ComponentProps) {
             />
           )}
 
-          {/* Note — under the video, private to the Student */}
           {canViewContent && currentUserId && <LessonNote note={note} />}
 
           {/* Lesson Content */}

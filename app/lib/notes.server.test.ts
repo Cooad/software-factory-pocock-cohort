@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { createTestDb, seedBaseData } from "~/test/setup";
-import * as schema from "~/db/schema";
-import { UserRole } from "~/db/schema";
+import { createLesson, createModule } from "./course-content.server";
+import { createStudent } from "./users.server";
 import { MAX_NOTE_LENGTH } from "./notes";
 import { getNote, listNotes, saveNote } from "./notes.server";
 
@@ -17,33 +17,11 @@ beforeEach(() => {
   db = createTestDb();
   base = seedBaseData(db);
 
-  const module = db
-    .insert(schema.modules)
-    .values({ courseId: base.course.id, title: "Basics", position: 1 })
-    .returning()
-    .get();
-
+  const module = createModule(db, base.course.id, "Basics");
   lessonIds = [1, 2, 3].map(
-    (position) =>
-      db
-        .insert(schema.lessons)
-        .values({ moduleId: module.id, title: `Lesson ${position}`, position })
-        .returning()
-        .get().id
+    (n) => createLesson(db, module.id, `Lesson ${n}`).id
   );
 });
-
-function addStudent(name: string) {
-  return db
-    .insert(schema.users)
-    .values({
-      name,
-      email: `${name.toLowerCase()}@example.com`,
-      role: UserRole.Student,
-    })
-    .returning()
-    .get();
-}
 
 describe("saving a Note", () => {
   it("creates a Note on a Lesson with none, trimmed", () => {
@@ -68,14 +46,11 @@ describe("saving a Note", () => {
   });
 
   it("never leaves a Student with two Notes on one Lesson", () => {
-    saveNote(db, base.user.id, lessonIds[0], "Mine", at(0));
+    saveNote(db, base.user.id, lessonIds[0], "First", at(0));
+    saveNote(db, base.user.id, lessonIds[0], "Second", at(1));
+    saveNote(db, base.user.id, lessonIds[0], "Third", at(2));
 
-    expect(() =>
-      db
-        .insert(schema.notes)
-        .values({ userId: base.user.id, lessonId: lessonIds[0], body: "Dup" })
-        .run()
-    ).toThrow();
+    expect(listNotes(db, base.user.id)).toHaveLength(1);
   });
 
   it("clears the Note when saved empty or blank", () => {
@@ -121,7 +96,7 @@ describe("saving a Note", () => {
 describe("listing Notes", () => {
   it("lists only the Student's own Notes, last edited first, with their Lesson and Course", () => {
     const student = base.user.id;
-    const other = addStudent("Priya").id;
+    const other = createStudent(db, "Priya", "priya@example.com").id;
 
     saveNote(db, student, lessonIds[0], "On lesson 1", at(0));
     saveNote(db, student, lessonIds[1], "On lesson 2", at(5));

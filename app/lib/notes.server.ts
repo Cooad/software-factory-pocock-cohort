@@ -4,17 +4,11 @@ import * as schema from "~/db/schema";
 import { courses, lessons, modules, notes } from "~/db/schema";
 import { noteBodySchema } from "~/lib/notes";
 
-// ─── Notes ───
-// A Student's own writing about a Lesson, private to the Student who wrote it.
-// See GLOSSARY.md. Nothing outside the owning Student's Lesson page and
-// Bookmarks & Notes page may read a Note body — no Instructor or Platform Admin view.
-//
-// Every function takes the database first, so tests can hand in an in-memory
-// one. Content access is checked by the caller (the Lesson page action).
+// A Note is private to its Student (GLOSSARY.md). Only that Student's own
+// pages may read a Note body: no Instructor or Platform Admin screen.
 
 export type Db = BetterSQLite3Database<typeof schema>;
 
-/** The Student's Note on a Lesson, or undefined if they have not written one. */
 export function getNote(db: Db, studentId: number, lessonId: number) {
   return db
     .select({ body: notes.body, updatedAt: notes.updatedAt })
@@ -27,12 +21,6 @@ export type SaveNoteResult =
   | { ok: true; note: { body: string; updatedAt: string } | null }
   | { ok: false; error: string };
 
-/**
- * Creates the Student's Note on a Lesson, or replaces its body and moves
- * "last edited" on if one exists. `createdAt` is kept on a re-save. The body
- * is trimmed; one over the cap is refused, never truncated. Saving an empty
- * body clears the Note, so the Lesson is back to having none.
- */
 export function saveNote(
   db: Db,
   studentId: number,
@@ -72,7 +60,6 @@ export function saveNote(
   return { ok: true, note };
 }
 
-/** The Student's Notes, most recently edited first, each with its Lesson and Course. */
 export function listNotes(db: Db, studentId: number) {
   return db
     .select({

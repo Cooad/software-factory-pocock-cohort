@@ -18,7 +18,6 @@ export function meta() {
 export async function loader({ request }: Route.LoaderArgs) {
   const userId = await requireUserId(request);
 
-  // Only the signed-in Student's own rows. A Note is private to its author.
   return {
     bookmarks: listBookmarks(db, userId),
     notes: listNotes(db, userId),
