@@ -1,8 +1,13 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { createTestDb, seedBaseData } from "~/test/setup";
-import * as schema from "~/db/schema";
+import {
+  createTestDb,
+  createUserWithRole,
+  seedBaseData,
+} from "~/test/setup";
+import { UserRole } from "~/db/schema";
 import { enrollStudent, isEnrolled } from "./enrollments.server";
 import { approveRefundRequest, raiseRefundRequest } from "./refunds.server";
+import { createIndividualPurchase } from "./purchases.server";
 import {
   fakeNotifications,
   type FakeNotifications,
@@ -57,16 +62,14 @@ describe("enrolling a Student", () => {
   });
 
   it("re-enrols a Lapsed Student whose Individual Purchase was refunded", async () => {
-    const purchase = db
-      .insert(schema.purchases)
-      .values({
-        userId: base.user.id,
-        courseId: base.course.id,
-        amountPaid: 7900,
-        createdAt: NOW.toISOString(),
-      })
-      .returning()
-      .get();
+    const purchase = createIndividualPurchase(
+      db,
+      base.user.id,
+      base.course.id,
+      7900,
+      null,
+      NOW
+    );
     await enrollStudent(db, base.user.id, base.course.id, NOW, notifications);
 
     const raised = await raiseRefundRequest(
@@ -78,15 +81,12 @@ describe("enrolling a Student", () => {
       fakeNotifications()
     );
     if (!raised.ok) throw new Error(raised.error);
-    const platformAdmin = db
-      .insert(schema.users)
-      .values({
-        name: "Pat Admin",
-        email: "pat@example.com",
-        role: schema.UserRole.Admin,
-      })
-      .returning()
-      .get();
+    const platformAdmin = createUserWithRole(
+      db,
+      "Pat Admin",
+      "pat@example.com",
+      UserRole.Admin
+    );
     await approveRefundRequest(
       db,
       raised.refundRequestId,

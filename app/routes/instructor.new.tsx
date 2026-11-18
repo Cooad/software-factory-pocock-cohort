@@ -5,9 +5,10 @@ import { z } from "zod";
 import type { Route } from "./+types/instructor.new";
 import { getCurrentUserId } from "~/lib/session";
 import { parseFormData } from "~/lib/validation";
+import { createCourse } from "~/lib/courses.server";
 import { UserRole } from "~/db/schema";
 import { db } from "~/db";
-import { users, categories, courses, CourseStatus } from "~/db/schema";
+import { users, categories, courses } from "~/db/schema";
 import { eq } from "drizzle-orm";
 import { Card, CardContent, CardHeader } from "~/components/ui/card";
 import { Button } from "~/components/ui/button";
@@ -41,35 +42,6 @@ function generateSlug(name: string) {
 
 function getCourseBySlug(slug: string) {
   return db.select().from(courses).where(eq(courses.slug, slug)).get();
-}
-
-function createCourse(
-  title: string,
-  slug: string,
-  description: string,
-  salesCopy: string,
-  instructorId: number,
-  categoryId: number,
-  coverImageUrl: string | null
-) {
-  if (salesCopy.trim().length === 0) {
-    throw new Error("Sales copy cannot be empty");
-  }
-
-  return db
-    .insert(courses)
-    .values({
-      title,
-      slug,
-      description,
-      salesCopy,
-      instructorId,
-      categoryId,
-      status: CourseStatus.Draft,
-      coverImageUrl,
-    })
-    .returning()
-    .get();
 }
 
 const newCourseSchema = z.object({
@@ -147,6 +119,7 @@ export async function action({ request }: Route.ActionArgs) {
   }
 
   const course = createCourse(
+    db,
     title,
     slug,
     description,

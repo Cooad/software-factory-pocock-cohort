@@ -24,6 +24,10 @@ export const SEAT_ON_HOLD =
 export const SEAT_REFUNDED =
   "This Seat is no longer available. Ask the person who shared it with you.";
 
+export function getSeatByCode(db: Db, seatCode: string) {
+  return db.select().from(coupons).where(eq(coupons.code, seatCode)).get();
+}
+
 export type ClaimSeatResult =
   | { ok: true; seat: Seat; enrollment: Enrollment }
   | { ok: false; error: string };

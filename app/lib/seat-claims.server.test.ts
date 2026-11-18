@@ -1,9 +1,15 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { createTestDb, seedBaseData } from "~/test/setup";
+import {
+  createTestDb,
+  createUserWithRole,
+  seedBaseData,
+} from "~/test/setup";
 import * as schema from "~/db/schema";
 import { enrollStudent, isEnrolled } from "./enrollments.server";
 import { approveRefundRequest, raiseRefundRequest } from "./refunds.server";
 import { claimSeat } from "./seat-claims.server";
+import { createTeamLicence } from "./purchases.server";
+import { createStudent } from "./users.server";
 import {
   fakeNotifications,
   type FakeNotifications,
@@ -23,43 +29,19 @@ beforeEach(() => {
   base = seedBaseData(db);
   notifications = fakeNotifications();
 
-  teamAdmin = db
-    .insert(schema.users)
-    .values({
-      name: "Tess Admin",
-      email: "tess@example.com",
-      role: schema.UserRole.Student,
-    })
-    .returning()
-    .get();
+  teamAdmin = createStudent(db, "Tess Admin", "tess@example.com");
 });
 
 function buySeats(seats: number, country: string | null = null) {
-  const team = db.insert(schema.teams).values({}).returning().get();
-  const purchase = db
-    .insert(schema.purchases)
-    .values({
-      userId: teamAdmin.id,
-      courseId: base.course.id,
-      amountPaid: 7900 * seats,
-      country,
-      createdAt: NOW.toISOString(),
-    })
-    .returning()
-    .get();
-  const seatRows = Array.from({ length: seats }, (_, i) =>
-    db
-      .insert(schema.coupons)
-      .values({
-        teamId: team.id,
-        courseId: base.course.id,
-        code: `SEAT-${purchase.id}-${i}`,
-        purchaseId: purchase.id,
-      })
-      .returning()
-      .get()
+  return createTeamLicence(
+    db,
+    teamAdmin.id,
+    base.course.id,
+    7900 * seats,
+    country,
+    seats,
+    NOW
   );
-  return { purchase, seats: seatRows };
 }
 
 describe("claiming a Seat", () => {
@@ -97,7 +79,7 @@ describe("claiming a Seat", () => {
     await claimSeat(
       db,
       seats[0].code,
-      addStudent("Ben").id,
+      createStudent(db, "Ben", "ben@example.com").id,
       "GB",
       NOW,
       notifications
@@ -128,7 +110,12 @@ describe("claiming a Seat", () => {
 
   it("refuses a Seat whose Team Licence was refunded", async () => {
     const { purchase, seats } = buySeats(2);
-    const platformAdmin = addStudent("Pat");
+    const platformAdmin = createUserWithRole(
+      db,
+      "Pat",
+      "pat@example.com",
+      schema.UserRole.Admin
+    );
     await approveRefundRequest(db, await raise(purchase.id), platformAdmin.id, null, NOW, fakeNotifications());
 
     expect(
@@ -162,7 +149,7 @@ describe("claiming a Seat", () => {
         await claimSeat(
           db,
           seats[0].code,
-          addStudent("Ben").id,
+          createStudent(db, "Ben", "ben@example.com").id,
           "GB",
           NOW,
           notifications
@@ -237,7 +224,7 @@ describe("the Seat claim Notification", () => {
     await claimSeat(
       db,
       seats[1].code,
-      addStudent("Ben").id,
+      createStudent(db, "Ben", "ben@example.com").id,
       "GB",
       NOW,
       notifications
@@ -268,7 +255,8 @@ describe("the Seat claim Notification", () => {
     await approveRefundRequest(
       db,
       await raise(purchase.id),
-      addStudent("Pat").id,
+      createUserWithRole(db, "Pat", "pat@example.com", schema.UserRole.Admin)
+        .id,
       null,
       NOW,
       fakeNotifications()
@@ -347,18 +335,6 @@ describe("the new Enrollment Notification from a Seat claim", () => {
 
 function sentOfKind(kind: string) {
   return notifications.sent.filter((n) => n.kind === kind);
-}
-
-function addStudent(name: string) {
-  return db
-    .insert(schema.users)
-    .values({
-      name,
-      email: `${name.toLowerCase()}@example.com`,
-      role: schema.UserRole.Student,
-    })
-    .returning()
-    .get();
 }
 
 async function raise(purchaseId: number) {

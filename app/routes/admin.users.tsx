@@ -10,6 +10,7 @@ import { db } from "~/db";
 import { eq } from "drizzle-orm";
 import { defaultNotifications } from "~/lib/notifications.server";
 import { syncUser } from "~/lib/notification-preferences.server";
+import { changeUserRole } from "~/lib/users.server";
 import { Card, CardContent, CardHeader } from "~/components/ui/card";
 import { Button } from "~/components/ui/button";
 import { Skeleton } from "~/components/ui/skeleton";
@@ -54,15 +55,6 @@ function updateUser(
   return db
     .update(users)
     .set({ name, email, bio })
-    .where(eq(users.id, id))
-    .returning()
-    .get();
-}
-
-function updateUserRole(id: number, role: UserRole) {
-  return db
-    .update(users)
-    .set({ role })
     .where(eq(users.id, id))
     .returning()
     .get();
@@ -128,7 +120,7 @@ export async function action({ request }: Route.ActionArgs) {
 
   if (intent === "update-role") {
     const { userId, role } = parsed.data;
-    updateUserRole(userId, role);
+    changeUserRole(db, userId, role);
     return { success: true };
   }
 

@@ -59,6 +59,7 @@ import { data, isRouteErrorResponse } from "react-router";
 import { z } from "zod";
 import { parseFormData, parseParams } from "~/lib/validation";
 import { createLesson, createModule } from "~/lib/course-content.server";
+import { setCourseStatus } from "~/lib/courses.server";
 
 function getUserById(id: number) {
   return db.select().from(users).where(eq(users.id, id)).get();
@@ -147,15 +148,6 @@ function updateCourse(id: number, title: string, description: string) {
   return db
     .update(courses)
     .set({ title, description, updatedAt: new Date().toISOString() })
-    .where(eq(courses.id, id))
-    .returning()
-    .get();
-}
-
-function updateCourseStatus(id: number, status: CourseStatus) {
-  return db
-    .update(courses)
-    .set({ status, updatedAt: new Date().toISOString() })
     .where(eq(courses.id, id))
     .returning()
     .get();
@@ -638,7 +630,7 @@ export async function action({ params, request }: Route.ActionArgs) {
   }
 
   if (intent === "update-status") {
-    updateCourseStatus(courseId, parsed.data.status);
+    setCourseStatus(db, courseId, parsed.data.status, new Date());
     return { success: true, field: "status" };
   }
 
