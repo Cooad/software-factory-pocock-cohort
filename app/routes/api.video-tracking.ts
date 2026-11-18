@@ -1,10 +1,14 @@
 import { data } from "react-router";
 import { z } from "zod";
+import { eq } from "drizzle-orm";
 import type { Route } from "./+types/api.video-tracking";
-import { getCurrentUserId } from "~/lib/session";
+import {
+  requireContentAccess,
+  requireUserId,
+} from "~/modules/course-access/request.server";
 import { parseJsonBody } from "~/lib/validation";
 import { db } from "~/db";
-import { videoWatchEvents } from "~/db/schema";
+import { lessons, modules, videoWatchEvents } from "~/db/schema";
 
 const videoTrackingSchema = z.object({
   lessonId: z.number(),
@@ -12,11 +16,18 @@ const videoTrackingSchema = z.object({
   positionSeconds: z.number(),
 });
 
+function getLessonCourseId(lessonId: number): number | undefined {
+  return db
+    .select({ courseId: modules.courseId })
+    .from(lessons)
+    .innerJoin(modules, eq(lessons.moduleId, modules.id))
+    .where(eq(lessons.id, lessonId))
+    .get()?.courseId;
+}
+
 export async function action({ request }: Route.ActionArgs) {
-  const currentUserId = await getCurrentUserId(request);
-  if (!currentUserId) {
-    throw data("Unauthorized", { status: 401 });
-  }
+  // Signed-out callers get 401 before anything about the body or lesson.
+  await requireUserId(request);
 
   const parsed = await parseJsonBody(request, videoTrackingSchema);
 
@@ -26,16 +37,22 @@ export async function action({ request }: Route.ActionArgs) {
 
   const { lessonId, eventType, positionSeconds } = parsed.data;
 
-  db
-    .insert(videoWatchEvents)
+  const courseId = getLessonCourseId(lessonId);
+  if (courseId === undefined) {
+    throw data("Lesson not found", { status: 404 });
+  }
+
+  // Same cached viewer as above: the request is read once.
+  const { userId } = await requireContentAccess(request, courseId);
+
+  db.insert(videoWatchEvents)
     .values({
-      userId: currentUserId,
+      userId,
       lessonId,
       eventType,
       positionSeconds,
     })
-    .returning()
-    .get();
+    .run();
 
   return { success: true };
 }
