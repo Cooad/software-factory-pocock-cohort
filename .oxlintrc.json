@@ -1,6 +1,7 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
   "plugins": ["typescript", "react", "jsx-a11y", "import", "vitest"],
+  "jsPlugins": ["./lint-rules/sql-safety.js"],
   "categories": {
     "correctness": "error"
   },
@@ -84,7 +85,10 @@
     ],
     "import/no-default-export": "error",
     "vitest/no-disabled-tests": "error",
-    "vitest/no-focused-tests": "error"
+    "vitest/no-focused-tests": "error",
+
+    // Security: sql.raw() only takes a fixed string. See lint-rules/sql-safety.js.
+    "sql-safety/no-dynamic-sql-raw": "error"
   },
   "overrides": [
     {

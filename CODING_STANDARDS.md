@@ -20,6 +20,17 @@ a type and you do not check it again. Coerce numbers through the schema, not
 `Number()`: `Number("")` is `0`, and an empty `lessonId` once opened lesson 0
 for every learner.
 
+## Send values to the database as parameters
+
+A value reaches SQL as a bound parameter: a drizzle operator (`eq`, `like`)
+or a `${value}` inside the `sql` tagged template. The raw better-sqlite3
+connection (`.exec()`, `.prepare()`, `.pragma()`, drizzle's `$client`)
+splices whatever string it gets straight into the query, so it is for fixed
+text only: migrations, the connection setup, pragmas. Code that interpolates
+anything into a string handed to the connection is SQL injection; rewrite it
+through drizzle. `npm run lint:oxlint` covers `sql.raw()`, but nothing checks
+the raw connection automatically.
+
 ## Check permission in the action, not only the loader
 
 A loader guard does not protect an action. They are separate requests. For a
