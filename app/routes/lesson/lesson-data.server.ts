@@ -2,15 +2,10 @@ import {
   type Capability,
   type CourseRef,
 } from "~/modules/permissions/course-permissions.server";
-
 import { renderComment } from "~/lib/comment-markdown.server";
-
 import { markdown, type Markdown } from "~/lib/text";
-
 import { type RenderedComment } from "~/components/comment-thread";
-
 import { db } from "~/db";
-
 import {
   categories,
   comments,
@@ -23,7 +18,6 @@ import {
   LessonProgressStatus,
   UserRole,
 } from "~/db/schema";
-
 import { and, asc, desc, eq, or, sql } from "drizzle-orm";
 
 export type CommentAuthor = {

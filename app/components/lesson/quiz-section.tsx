@@ -1,11 +1,8 @@
 import { useState, useEffect } from "react";
 import { useFetcher } from "react-router";
 import { toast } from "sonner";
-
 import { Button } from "~/components/ui/button";
-
 import { Card, CardContent } from "~/components/ui/card";
-
 import {
   CheckCircle2,
   HelpCircle,

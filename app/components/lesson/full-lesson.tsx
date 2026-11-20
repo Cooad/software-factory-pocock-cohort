@@ -1,14 +1,10 @@
 import { useEffect } from "react";
 import { Link, useFetcher, useNavigate } from "react-router";
-
 import type { Route } from "../../routes/+types/courses.$slug.lessons.$lessonId";
-
 import { CommentThread } from "~/components/comment-thread";
 import { LessonProgressStatus } from "~/db/schema";
 import { Button } from "~/components/ui/button";
-
 import { Card, CardContent } from "~/components/ui/card";
-
 import {
   CheckCircle2,
   ChevronLeft,
@@ -20,15 +16,10 @@ import {
 } from "lucide-react";
 import { formatDuration } from "~/lib/utils";
 import { YouTubePlayer } from "~/components/youtube-player";
-
 import { LessonNote } from "~/components/lesson-note";
-
 import { CurriculumSidebar } from "~/components/lesson/curriculum-sidebar";
-
 import { LessonBreadcrumb } from "~/components/lesson/locked-lesson";
-
 import { QuizSection } from "~/components/lesson/quiz-section";
-
 import { useAutoplay } from "~/components/lesson/use-autoplay";
 
 type LessonLoaderData = Route.ComponentProps["loaderData"];

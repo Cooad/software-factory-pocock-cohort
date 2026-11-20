@@ -1,5 +1,4 @@
 import { db } from "~/db";
-
 import {
   quizzes,
   quizQuestions,
@@ -7,7 +6,6 @@ import {
   quizAttempts,
   quizAnswers,
 } from "~/db/schema";
-
 import { and, desc, eq } from "drizzle-orm";
 
 export function getQuizByLessonId(lessonId: number) {

@@ -1,6 +1,5 @@
-import { Link } from "react-router";
+import { Link, data, isRouteErrorResponse } from "react-router";
 import type { Route } from "./+types/courses.$slug.lessons.$lessonId";
-
 import {
   coursePermissions,
   type DenialReason,
@@ -10,32 +9,19 @@ import {
   deleteComment,
   editComment,
 } from "~/lib/comments.server";
-
 import { defaultNotifications } from "~/lib/notifications.server";
-
 import { isBookmarked, toggleBookmark } from "~/lib/bookmarks.server";
-
 import { getNote, saveNote } from "~/lib/notes.server";
-
 import { MAX_NOTE_LENGTH } from "~/lib/notes";
-
 import { db } from "~/db";
-
 import { quizzes } from "~/db/schema";
 import { eq } from "drizzle-orm";
 import { Button } from "~/components/ui/button";
-
 import { AlertTriangle } from "lucide-react";
 import { renderMarkdown } from "~/lib/markdown.server";
-
-import { data, isRouteErrorResponse } from "react-router";
-
 import { z } from "zod";
-
 import { FullLesson } from "~/components/lesson/full-lesson";
-
 import { LockedLesson } from "~/components/lesson/locked-lesson";
-
 import {
   INTENT_CAPABILITY,
   calculateWatchProgress,
@@ -60,7 +46,6 @@ import {
   getQuizByLessonId,
   getQuizWithQuestions,
 } from "./lesson/lesson-quiz.server";
-
 import { parseFormData } from "~/lib/validation";
 
 const createCommentSchema = z.object({
