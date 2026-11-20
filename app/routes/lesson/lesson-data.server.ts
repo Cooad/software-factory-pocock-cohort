@@ -268,7 +268,7 @@ export function calculateWatchProgress(
   return Math.min(Math.round((maxPosition / videoDurationSeconds) * 100), 100);
 }
 
-export function getCourseForLesson(lessonId: number) {
+function getCourseForLesson(lessonId: number) {
   return db
     .select({
       courseId: courses.id,
