@@ -249,10 +249,17 @@ const mutate = targets.flatMap(({ file, lines }) =>
 // Pass the list as one argument, not through a shell. A path that contains a
 // space or a shell character must not change the command.
 try {
-  execFileSync("npx", ["stryker", "run", "--mutate", mutate.join(",")], {
-    cwd: repoRoot,
-    stdio: "inherit",
-  });
+  // Run Stryker's JS entry point with node, not `npx`: on Windows `npx` is
+  // `npx.cmd`, which execFileSync cannot start without a shell.
+  const stryker = join(
+    repoRoot,
+    "node_modules/@stryker-mutator/core/bin/stryker.js"
+  );
+  execFileSync(
+    process.execPath,
+    [stryker, "run", "--mutate", mutate.join(",")],
+    { cwd: repoRoot, stdio: "inherit" }
+  );
 } catch (error) {
   const status = (error as { status?: number }).status;
   process.exit(typeof status === "number" ? status : 1);

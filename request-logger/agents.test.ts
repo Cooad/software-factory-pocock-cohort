@@ -1075,7 +1075,8 @@ describe("resolveChoice — custom base URL", () => {
 });
 
 describe("resolveChoice — custom base URL, per-agent command template", () => {
-  it("builds a one-run OpenCode provider config for the OpenAI-compatible route", () => {
+  // Needs /bin/sh, which Windows does not have.
+  it.skipIf(process.platform === "win32")("builds a one-run OpenCode provider config for the OpenAI-compatible route", () => {
     const result = customTarget({
       agent: "opencode",
       provider: CUSTOM_ID,
@@ -1105,7 +1106,8 @@ describe("resolveChoice — custom base URL, per-agent command template", () => 
     expect(result.setup).toEqual([]);
   });
 
-  it("shell-quotes a model ID containing quotes and metacharacters", () => {
+  // Needs /bin/sh, which Windows does not have.
+  it.skipIf(process.platform === "win32")("shell-quotes a model ID containing quotes and metacharacters", () => {
     const model = `model ' "$HOME"; printf INJECTED`;
     const result = customTarget({
       agent: "opencode",
