@@ -18,6 +18,12 @@ const config = {
     // and Stryker then concludes that the project has no tests. Set this
     // option to false, so that the runner starts the full suite instead.
     related: false,
+    // The runner defaults to the "threads" pool, but Vitest itself, and so
+    // `npm run test`, uses "forks". On Windows, the tests that open a
+    // better-sqlite3 database crash a worker thread with an access violation
+    // (exit code 3221225477), and the initial test run fails. Forks matches
+    // `npm run test` and does not crash.
+    pool: "forks",
   },
   // "json" writes the report to `reports/mutation/mutation.json`. This is the
   // same data as the HTML report, but an agent or `jq` can read it directly.

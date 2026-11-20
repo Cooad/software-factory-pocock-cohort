@@ -24,7 +24,7 @@
  */
 import { execFileSync } from "node:child_process";
 import { existsSync, statSync, readdirSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { posix, resolve } from "node:path";
 
 /**
  * The top of the repository.
@@ -149,7 +149,9 @@ function isTested(file: string): boolean {
 function walk(dir: string): string[] {
   const absolute = resolve(repoRoot, dir);
   return readdirSync(absolute, { withFileTypes: true }).flatMap((entry) => {
-    const child = join(dir, entry.name);
+    // Git-style forward slashes on every platform. `TESTED_ROOTS` uses them,
+    // and a Windows path (`app\lib\x.ts`) would match none of the roots.
+    const child = posix.join(dir, entry.name);
     if (entry.isDirectory()) return walk(child);
     return isSource(child) ? [child] : [];
   });
@@ -163,7 +165,8 @@ function namedFiles(args: string[]): string[] {
       console.error(`No such file or directory: ${arg}`);
       process.exit(1);
     }
-    return statSync(absolute).isDirectory() ? walk(arg) : [arg];
+    const path = arg.replaceAll("\\", "/");
+    return statSync(absolute).isDirectory() ? walk(path) : [path];
   });
 }
 
@@ -248,12 +251,29 @@ const mutate = targets.flatMap(({ file, lines }) =>
 
 // Pass the list as one argument, not through a shell. A path that contains a
 // space or a shell character must not change the command.
+//
+// Windows is the exception: `npx` there is `npx.cmd`, and Node starts a
+// `.cmd` file only through a shell. Without one, the call fails with ENOENT.
+// On Windows, wrap the list in double quotes so cmd.exe still reads it as one
+// argument.
+const isWindows = process.platform === "win32";
+const mutateArg = mutate.join(",");
 try {
-  execFileSync("npx", ["stryker", "run", "--mutate", mutate.join(",")], {
-    cwd: repoRoot,
-    stdio: "inherit",
-  });
+  execFileSync(
+    "npx",
+    [
+      "-y",
+      "stryker",
+      "run",
+      "--mutate",
+      isWindows ? `"${mutateArg}"` : mutateArg,
+    ],
+    { cwd: repoRoot, stdio: "inherit", shell: isWindows }
+  );
 } catch (error) {
   const status = (error as { status?: number }).status;
+  // A failure to start Stryker at all (ENOENT, say) has no exit status. Say
+  // so, or the run ends with exit code 1 and no message.
+  if (typeof status !== "number") console.error(error);
   process.exit(typeof status === "number" ? status : 1);
 }
