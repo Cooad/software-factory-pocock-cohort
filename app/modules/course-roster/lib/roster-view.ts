@@ -32,8 +32,17 @@ export function rosterStatus(row: RosterRow): LessonProgressStatus {
   return LessonProgressStatus.NotStarted;
 }
 
+function searchNeedle(search: string) {
+  return search.trim().toLowerCase();
+}
+
+/** Whether the view hides any student: a search or a status filter. */
+export function isRosterFiltered(view: RosterView) {
+  return searchNeedle(view.search) !== "" || view.status !== "all";
+}
+
 function matchesSearch(row: RosterRow, search: string) {
-  const needle = search.trim().toLowerCase();
+  const needle = searchNeedle(search);
   return (
     row.name.toLowerCase().includes(needle) ||
     row.email.toLowerCase().includes(needle)

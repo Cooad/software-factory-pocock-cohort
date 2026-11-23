@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { LessonProgressStatus } from "~/db/schema";
 import {
   defaultRosterView,
+  isRosterFiltered,
   rosterStatus,
   sortRosterBy,
   viewRoster,
@@ -188,5 +189,40 @@ describe("sortRosterBy", () => {
       search: "ada",
       status: LessonProgressStatus.InProgress,
     });
+  });
+});
+
+describe("isRosterFiltered", () => {
+  it("is not filtered by default", () => {
+    expect(isRosterFiltered(defaultRosterView)).toBe(false);
+  });
+
+  it("is not filtered by a search of only spaces", () => {
+    expect(isRosterFiltered({ ...defaultRosterView, search: "   " })).toBe(
+      false
+    );
+  });
+
+  it("is filtered by a search", () => {
+    expect(isRosterFiltered({ ...defaultRosterView, search: "a" })).toBe(true);
+  });
+
+  it("is filtered by a status", () => {
+    expect(
+      isRosterFiltered({
+        ...defaultRosterView,
+        status: LessonProgressStatus.NotStarted,
+      })
+    ).toBe(true);
+  });
+
+  it("is not changed by sorting", () => {
+    expect(
+      isRosterFiltered({
+        ...defaultRosterView,
+        sortBy: "progress",
+        direction: "desc",
+      })
+    ).toBe(false);
   });
 });

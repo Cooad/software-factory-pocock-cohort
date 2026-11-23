@@ -1,5 +1,6 @@
 export {
   defaultRosterView,
+  isRosterFiltered,
   rosterStatus,
   sortRosterBy,
   viewRoster,

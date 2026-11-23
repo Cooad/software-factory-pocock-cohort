@@ -1,5 +1,5 @@
 import { LessonProgressStatus } from "~/db/schema";
-import type { RosterView } from "~/modules/course-roster";
+import { isRosterFiltered, type RosterView } from "~/modules/course-roster";
 import { statusLabels } from "~/components/course-editor/roster-status";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
@@ -38,7 +38,7 @@ export function RosterFilters({
   shownCount: number;
   totalCount: number;
 }) {
-  const isFiltered = view.search.trim() !== "" || view.status !== "all";
+  const isFiltered = isRosterFiltered(view);
 
   return (
     <div className="mb-4 flex flex-wrap items-center gap-3">
