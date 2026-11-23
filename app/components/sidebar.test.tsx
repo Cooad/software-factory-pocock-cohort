@@ -4,8 +4,10 @@ import { describe, expect, it } from "vitest";
 import { UserRole } from "~/db/schema";
 import { Sidebar } from "./sidebar";
 
-const longTitle = "Design Systems with Tailwind";
-const longName = "Ava Nakamura";
+// Each is wider than the 14rem sidebar at text-sm, so it would truncate.
+const longTitle =
+  "Design Systems with Tailwind: Tokens, Themes and Component Libraries";
+const longName = "Maximiliana Konstantinopoulou-Nakamura";
 
 function renderSidebar() {
   const Stub = createRoutesStub([
