@@ -1,6 +1,6 @@
 import { LessonProgressStatus } from "~/db/schema";
 import type { RosterView } from "~/modules/course-roster";
-import { statusLabels } from "~/components/course-editor/student-row";
+import { statusLabels } from "~/components/course-editor/roster-status";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import {
