@@ -45,6 +45,7 @@ import {
 import { data, isRouteErrorResponse } from "react-router";
 import { z } from "zod";
 import { parseFormData } from "~/lib/validation";
+import { normaliseSalesCopy } from "~/lib/sales-copy";
 
 const courseEditorActionSchema = z.discriminatedUnion("intent", [
   z.object({
@@ -105,7 +106,10 @@ const courseEditorActionSchema = z.discriminatedUnion("intent", [
   }),
   z.object({
     intent: z.literal("update-sales-copy"),
-    salesCopy: z.string().trim().min(1, "Sales copy cannot be empty."),
+    salesCopy: z
+      .string()
+      .transform(normaliseSalesCopy)
+      .pipe(z.string().min(1, "Sales copy cannot be empty.")),
   }),
 ]);
 

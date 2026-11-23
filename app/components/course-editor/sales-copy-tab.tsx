@@ -6,14 +6,14 @@ import { Card, CardContent, CardHeader } from "~/components/ui/card";
 import { Button } from "~/components/ui/button";
 import { Save } from "lucide-react";
 import { useFetcherToast } from "~/components/course-editor/use-fetcher-toast";
+import { describeSalesCopyDraft } from "~/lib/sales-copy";
 
 type Course = Route.ComponentProps["loaderData"]["course"];
 
 export function SalesCopyTab({ course }: { course: Course }) {
   const salesCopyFetcher = useFetcher();
   const [salesCopy, setSalesCopy] = useState<string>(course.salesCopy);
-  const salesCopyHasChanges = salesCopy !== course.salesCopy;
-  const salesCopyIsEmpty = salesCopy.trim().length === 0;
+  const draft = describeSalesCopyDraft(salesCopy, course.salesCopy);
   useFetcherToast(salesCopyFetcher, "Sales copy saved.");
 
   function handleSalesCopySave() {
@@ -42,8 +42,8 @@ export function SalesCopyTab({ course }: { course: Course }) {
           <Button
             onClick={handleSalesCopySave}
             disabled={
-              !salesCopyHasChanges ||
-              salesCopyIsEmpty ||
+              !draft.hasChanges ||
+              draft.isEmpty ||
               salesCopyFetcher.state !== "idle"
             }
           >
@@ -53,8 +53,8 @@ export function SalesCopyTab({ course }: { course: Course }) {
               : "Save Sales Copy"}
           </Button>
           <SalesCopyStatus
-            isEmpty={salesCopyIsEmpty}
-            hasChanges={salesCopyHasChanges}
+            isEmpty={draft.isEmpty}
+            hasChanges={draft.hasChanges}
           />
         </div>
       </CardContent>
