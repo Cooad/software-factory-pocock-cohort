@@ -4,9 +4,9 @@ import type { Person } from "~/modules/permissions/person.server";
 import {
   buildCourseQuery,
   getAllCategories,
+  getCompletedLessonCounts,
   getCourseRatingSummaries,
-  getLessonCountForCourse,
-  getProgress,
+  getLessonCounts,
   getUserEnrolledCourses,
   type Db,
 } from "./course-queries";
@@ -32,7 +32,9 @@ export type CatalogViewer = {
   country: string | null;
 };
 
-type Progress = { progress: number; completedLessons: number };
+type Progress = { progress: number | null; completedLessons: number | null };
+
+const NO_PROGRESS: Progress = { progress: null, completedLessons: null };
 
 /** The course ids the Person has an Enrollment on, without duplicates. */
 function enrolledCourseIds(db: Db, person: Person | null): Set<number> {
@@ -44,17 +46,22 @@ function enrolledCourseIds(db: Db, person: Person | null): Set<number> {
   );
 }
 
-function progressByCourse(
-  db: Db,
-  person: Person | null,
-  courseIds: Set<number>
-): Map<number, Progress> {
-  const progress = new Map<number, Progress>();
-  if (!person) return progress;
-  for (const courseId of courseIds) {
-    progress.set(courseId, getProgress(db, person.id, courseId));
-  }
-  return progress;
+/** Progress on each course with an Enrollment, from its lesson counts. */
+function progressOn(
+  enrolledIds: Set<number>,
+  lessonCounts: Map<number, number>,
+  completedCounts: Map<number, number>
+): (courseId: number) => Progress {
+  return (courseId) => {
+    if (!enrolledIds.has(courseId)) return NO_PROGRESS;
+    const lessonCount = lessonCounts.get(courseId) ?? 0;
+    const completedLessons = completedCounts.get(courseId) ?? 0;
+    const progress =
+      lessonCount === 0
+        ? 0
+        : Math.round((completedLessons / lessonCount) * 100);
+    return { progress, completedLessons };
+  };
 }
 
 function badgeFor(
@@ -89,21 +96,21 @@ export function browseCatalog(
     onlyCourseIds: owned ? [...enrolledIds] : null,
   });
 
-  const progressMap = progressByCourse(db, person, enrolledIds);
-  const ratingSummaries = getCourseRatingSummaries(
-    db,
-    courses.map((c) => c.id)
-  );
+  const courseIds = courses.map((c) => c.id);
+  const lessonCounts = getLessonCounts(db, courseIds);
+  const completedCounts = person
+    ? getCompletedLessonCounts(db, person.id, [...enrolledIds])
+    : new Map<number, number>();
+  const progressFor = progressOn(enrolledIds, lessonCounts, completedCounts);
+  const ratingSummaries = getCourseRatingSummaries(db, courseIds);
 
   return {
     courses: courses.map((course) => {
-      const userProgress = progressMap.get(course.id);
       const rating = ratingSummaries.get(course.id);
       return {
         ...course,
-        lessonCount: getLessonCountForCourse(db, course.id),
-        progress: userProgress?.progress ?? null,
-        completedLessons: userProgress?.completedLessons ?? null,
+        lessonCount: lessonCounts.get(course.id) ?? 0,
+        ...progressFor(course.id),
         pppPrice: pppPriceFor(course, country),
         ratingAverage: rating?.average ?? null,
         ratingCount: rating?.count ?? 0,
