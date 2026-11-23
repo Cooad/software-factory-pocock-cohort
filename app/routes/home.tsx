@@ -1,5 +1,5 @@
 import { Link } from "react-router";
-import { useState, useEffect } from "react";
+import { useTheme } from "~/modules/theme";
 import type { Route } from "./+types/home";
 import { Button } from "~/components/ui/button";
 import {
@@ -173,20 +173,8 @@ export default function Home({ loaderData }: Route.ComponentProps) {
     countryTierInfo,
     countries,
   } = loaderData;
-  const [isDark, setIsDark] = useState(false);
-
-  useEffect(() => {
-    setIsDark(document.documentElement.classList.contains("dark"));
-  }, []);
-
-  function toggleDarkMode() {
-    const next = !isDark;
-    setIsDark(next);
-    document.documentElement.classList.toggle("dark", next);
-    try {
-      localStorage.setItem("cadence-theme", next ? "dark" : "light");
-    } catch {}
-  }
+  const { theme, toggleTheme: toggleDarkMode } = useTheme();
+  const isDark = theme === "dark";
 
   return (
     <div className="min-h-screen bg-background">
