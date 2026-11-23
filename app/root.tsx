@@ -11,7 +11,7 @@ import {
 import type { Route } from "./+types/root";
 import "./app.css";
 import { themeBootScript } from "~/modules/theme/boot-script";
-import { useFollowSystemTheme } from "~/modules/theme/use-theme";
+import { useStartTheme } from "~/modules/theme/use-theme";
 
 export const links: Route.LinksFunction = () => [
   { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" },
@@ -62,7 +62,7 @@ function NavigationLoadingBar() {
 }
 
 export default function App() {
-  useFollowSystemTheme();
+  useStartTheme();
   return (
     <>
       <NavigationLoadingBar />

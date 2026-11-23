@@ -13,3 +13,8 @@ export {
   type ThemeStorage,
   type ThemeStore,
 } from "./lib/store";
+export {
+  createLazyThemeStore,
+  SERVER_THEME_STATE,
+  type LazyThemeStore,
+} from "./lib/lazy-store";

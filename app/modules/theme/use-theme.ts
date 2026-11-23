@@ -1,15 +1,7 @@
 import { useEffect, useSyncExternalStore } from "react";
 import { DARK_SCHEME_QUERY, type ThemePreference } from "./lib/preference";
-import {
-  createThemeStore,
-  type ThemeState,
-  type ThemeStorage,
-  type ThemeStore,
-} from "./lib/store";
-
-const SERVER_STATE: ThemeState = { preference: "system", resolved: "light" };
-
-let browserStore: ThemeStore | null = null;
+import { createLazyThemeStore, SERVER_THEME_STATE } from "./lib/lazy-store";
+import type { ThemeState, ThemeStorage } from "./lib/store";
 
 const browserStorage: ThemeStorage = {
   getItem: (key) => window.localStorage.getItem(key),
@@ -17,32 +9,25 @@ const browserStorage: ThemeStorage = {
   removeItem: (key) => window.localStorage.removeItem(key),
 };
 
-function getBrowserStore(): ThemeStore {
-  browserStore ??= createThemeStore({
-    storage: browserStorage,
-    media: window.matchMedia(DARK_SCHEME_QUERY),
-    root: document.documentElement,
-  });
-  return browserStore;
-}
+const browserTheme = createLazyThemeStore(() => ({
+  storage: browserStorage,
+  media: window.matchMedia(DARK_SCHEME_QUERY),
+  root: document.documentElement,
+}));
 
-const subscribe = (listener: () => void) =>
-  getBrowserStore().subscribe(listener);
-const getSnapshot = () => getBrowserStore().getSnapshot();
-const getServerSnapshot = () => SERVER_STATE;
+const getServerSnapshot = () => SERVER_THEME_STATE;
 
 export function useTheme(): ThemeState & {
   setPreference: (preference: ThemePreference) => void;
 } {
-  const state = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
-  return {
-    ...state,
-    setPreference: (preference) => getBrowserStore().setPreference(preference),
-  };
+  const state = useSyncExternalStore(
+    browserTheme.subscribe,
+    browserTheme.getSnapshot,
+    getServerSnapshot
+  );
+  return { ...state, setPreference: browserTheme.setPreference };
 }
 
-export function useFollowSystemTheme(): void {
-  useEffect(() => {
-    getBrowserStore();
-  }, []);
+export function useStartTheme(): void {
+  useEffect(() => browserTheme.start(), []);
 }
