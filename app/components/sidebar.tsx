@@ -208,7 +208,10 @@ export function Sidebar({
                   )
                 }
               >
-                <div className="truncate text-sm font-medium">
+                <div
+                  title={course.title}
+                  className="line-clamp-2 break-words text-sm font-medium"
+                >
                   {course.title}
                 </div>
                 <div className="mt-1 flex items-center gap-2">
@@ -238,36 +241,48 @@ export function Sidebar({
         </button>
 
         {currentUser && (
-          <div className="flex items-center gap-3 rounded-md px-3 py-2">
-            <UserAvatar
-              name={currentUser.name}
-              avatarUrl={currentUser.avatarUrl}
-            />
-            <div className="flex-1 min-w-0">
-              <div className="truncate text-sm font-medium">
-                {currentUser.name}
-              </div>
-              <div className="truncate text-xs capitalize text-sidebar-foreground/50">
-                {currentUser.role}
-              </div>
-            </div>
+          <>
             <NavLink
               to="/settings"
-              title="Settings"
-              className="rounded-md p-1 text-sidebar-foreground/50 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+              className={({ isActive }) =>
+                cn(
+                  "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                  isActive
+                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                    : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                )
+              }
             >
               <Settings className="size-4" />
+              Settings
             </NavLink>
             <Form method="post" action="/api/logout">
               <button
                 type="submit"
-                title="Sign out"
-                className="rounded-md p-1 text-sidebar-foreground/50 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
               >
                 <LogOut className="size-4" />
+                Sign out
               </button>
             </Form>
-          </div>
+            <div className="flex items-center gap-3 rounded-md px-3 py-2">
+              <UserAvatar
+                name={currentUser.name}
+                avatarUrl={currentUser.avatarUrl}
+              />
+              <div className="flex-1 min-w-0">
+                <div
+                  title={currentUser.name}
+                  className="break-words text-sm font-medium"
+                >
+                  {currentUser.name}
+                </div>
+                <div className="truncate text-xs capitalize text-sidebar-foreground/50">
+                  {currentUser.role}
+                </div>
+              </div>
+            </div>
+          </>
         )}
       </div>
     </aside>
