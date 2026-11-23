@@ -65,19 +65,14 @@ function progressOn(
 }
 
 function badgeFor(
-  permissions: ReturnType<typeof createCoursePermissions>,
   person: Person | null,
-  course: { id: number; instructorId: number; enrolled: boolean }
+  course: { id: number; instructorId: number },
+  ids: { enrolled: Set<number>; locked: Set<number> }
 ): CatalogBadge {
   if (!person) return null;
   if (course.instructorId === person.id) return "your-course";
-  if (!course.enrolled) return null;
-  const decisions = permissions.decide(person, { courseId: course.id });
-  const locked =
-    decisions.found &&
-    !decisions.take.allowed &&
-    decisions.take.reason.kind === "country-lock";
-  return locked ? "locked" : "enrolled";
+  if (!ids.enrolled.has(course.id)) return null;
+  return ids.locked.has(course.id) ? "locked" : "enrolled";
 }
 
 export function browseCatalog(
@@ -86,7 +81,6 @@ export function browseCatalog(
   query: CatalogQuery
 ) {
   const { person, country } = viewer;
-  const permissions = createCoursePermissions(db);
   const enrolledIds = enrolledCourseIds(db, person);
   const owned = query.owned && person !== null;
 
@@ -103,6 +97,12 @@ export function browseCatalog(
     : new Map<number, number>();
   const progressFor = progressOn(enrolledIds, lessonCounts, completedCounts);
   const ratingSummaries = getCourseRatingSummaries(db, courseIds);
+  const badgeIds = {
+    enrolled: enrolledIds,
+    locked: person
+      ? createCoursePermissions(db).findCountryLockedCourseIds(person, courses)
+      : new Set<number>(),
+  };
 
   return {
     courses: courses.map((course) => {
@@ -114,10 +114,7 @@ export function browseCatalog(
         pppPrice: pppPriceFor(course, country),
         ratingAverage: rating?.average ?? null,
         ratingCount: rating?.count ?? 0,
-        badge: badgeFor(permissions, person, {
-          ...course,
-          enrolled: enrolledIds.has(course.id),
-        }),
+        badge: badgeFor(person, course, badgeIds),
       };
     }),
     categories: getAllCategories(db),

@@ -1,8 +1,14 @@
 import { data } from "react-router";
-import { and, eq } from "drizzle-orm";
-import { courses, enrollments, lessons, modules } from "~/db/schema";
+import { and, desc, eq, inArray, notExists } from "drizzle-orm";
+import {
+  coupons,
+  courses,
+  enrollments,
+  lessons,
+  modules,
+  purchases,
+} from "~/db/schema";
 import { checkCountryLock, countryName } from "~/lib/ppp";
-import { getNewestIndividualPurchase } from "~/lib/refunds.server";
 import { getPerson, SIGNED_OUT_MESSAGE, type Db, type Person } from "./person";
 
 export type Capability = "view" | "take" | "manage";
@@ -77,9 +83,7 @@ export function decide(
     };
   }
 
-  // Owning the course is what counts, whatever the role column says.
-  const canManage =
-    course.instructorId === person.id || person.role === "platform-admin";
+  const canManage = mayManage(person, course);
   const enrolled = !!db
     .select({ id: enrollments.id })
     .from(enrollments)
@@ -159,20 +163,62 @@ function refusalMessage(reason: DenialReason): string {
   }
 }
 
+type CountryLock = Extract<DenialReason, { kind: "country-lock" }>;
+
+/** The course facts a Country Lock is judged on. */
+export type PricedCourse = Pick<
+  Course,
+  "id" | "price" | "pppEnabled" | "instructorId"
+>;
+
+/** Owning the course is what counts, whatever the role column says. */
+function mayManage(person: Person, course: PricedCourse): boolean {
+  return course.instructorId === person.id || person.role === "platform-admin";
+}
+
 /**
- * Playback Country Lock: judged against the newest Individual Purchase only.
- * A Team Licence or a Claimed Seat never locks playback (ADR-0013).
+ * The country of the buyer's newest Individual Purchase of each course. A
+ * Team Licence is a Purchase that granted Seats, so it is skipped.
  */
-function findCountryLock(
+function newestIndividualPurchaseCountries(
   db: Db,
-  person: Person,
-  course: Course
-): Extract<DenialReason, { kind: "country-lock" }> | null {
-  const purchase = getNewestIndividualPurchase(db, person.id, course.id);
+  buyerId: number,
+  courseIds: number[]
+): Map<number, string | null> {
+  const newestFirst = db
+    .select({ courseId: purchases.courseId, country: purchases.country })
+    .from(purchases)
+    .where(
+      and(
+        eq(purchases.userId, buyerId),
+        inArray(purchases.courseId, courseIds),
+        notExists(
+          db
+            .select({ id: coupons.id })
+            .from(coupons)
+            .where(eq(coupons.purchaseId, purchases.id))
+        )
+      )
+    )
+    .orderBy(desc(purchases.createdAt), desc(purchases.id))
+    .all();
+
+  const countries = new Map<number, string | null>();
+  for (const { courseId, country } of newestFirst) {
+    if (!countries.has(courseId)) countries.set(courseId, country);
+  }
+  return countries;
+}
+
+function lockFor(
+  course: PricedCourse,
+  purchaseCountry: string | null,
+  person: Person
+): CountryLock | null {
   const lock = checkCountryLock(
     course.price,
     course.pppEnabled,
-    purchase?.country ?? null,
+    purchaseCountry,
     person.country
   );
   if (!lock.blocked || !lock.purchaseCountry || !lock.blockedCountry) {
@@ -183,6 +229,57 @@ function findCountryLock(
     purchaseCountry: lock.purchaseCountry,
     currentCountry: lock.blockedCountry,
   };
+}
+
+/**
+ * Playback Country Lock: judged against the newest Individual Purchase only.
+ * A Team Licence or a Claimed Seat never locks playback (ADR-0013).
+ */
+function findCountryLock(
+  db: Db,
+  person: Person,
+  course: Course
+): CountryLock | null {
+  const countries = newestIndividualPurchaseCountries(db, person.id, [
+    course.id,
+  ]);
+  return lockFor(course, countries.get(course.id) ?? null, person);
+}
+
+/**
+ * Of these courses, the ids of those the Person has an Enrollment on but
+ * may not take because of Country Lock. Two queries, however many courses.
+ */
+export function findCountryLockedCourseIds(
+  db: Db,
+  person: Person,
+  candidates: PricedCourse[]
+): Set<number> {
+  const lockable = candidates.filter((course) => !mayManage(person, course));
+  if (lockable.length === 0) return new Set();
+  const courseIds = lockable.map((course) => course.id);
+
+  const enrolled = db
+    .select({ courseId: enrollments.courseId })
+    .from(enrollments)
+    .where(
+      and(
+        eq(enrollments.userId, person.id),
+        inArray(enrollments.courseId, courseIds)
+      )
+    )
+    .all();
+  const enrolledIds = new Set(enrolled.map((row) => row.courseId));
+  const countries = newestIndividualPurchaseCountries(db, person.id, courseIds);
+
+  return new Set(
+    lockable
+      .filter((course) => enrolledIds.has(course.id))
+      .filter((course) =>
+        lockFor(course, countries.get(course.id) ?? null, person)
+      )
+      .map((course) => course.id)
+  );
 }
 
 const POSITIVE_INTEGER = /^[1-9][0-9]*$/;

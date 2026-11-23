@@ -2,10 +2,12 @@ import { db } from "~/db";
 import type { Db, Person } from "./lib/person";
 import {
   decide,
+  findCountryLockedCourseIds,
   getCourseDecisions,
   requireCapability,
   type Capability,
   type CourseRef,
+  type PricedCourse,
 } from "./lib/course-permissions";
 
 export type {
@@ -15,6 +17,7 @@ export type {
   CourseRef,
   Decision,
   DenialReason,
+  PricedCourse,
 } from "./lib/course-permissions";
 
 /**
@@ -39,6 +42,15 @@ export function createCoursePermissions(database: Db) {
      */
     decide(person: Person | null, courseRef: CourseRef) {
       return decide(database, person, courseRef);
+    },
+
+    /**
+     * Of these courses, the ids of those the Person has an Enrollment on but
+     * may not take because of Country Lock. For a page listing many courses,
+     * where `decide` per course would query in a loop.
+     */
+    findCountryLockedCourseIds(person: Person, candidates: PricedCourse[]) {
+      return findCountryLockedCourseIds(database, person, candidates);
     },
 
     /**
