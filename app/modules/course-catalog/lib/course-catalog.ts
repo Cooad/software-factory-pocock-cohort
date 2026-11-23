@@ -11,18 +11,13 @@ import {
   type Db,
 } from "./course-queries";
 
-/**
- * What the card says about the viewer's relationship to the course:
- * - your-course: the viewer is its Instructor (wins over everything else).
- * - enrolled: the viewer has an Enrollment.
- * - locked: the viewer has an Enrollment under Country Lock.
- */
+/** The viewer's relationship to a course, as the card shows it (ADR-0014). */
 export type CatalogBadge = "your-course" | "enrolled" | "locked" | null;
 
 export type CatalogQuery = {
   search: string | null;
   category: string | null;
-  /** Only courses the viewer has an Enrollment on. Ignored when signed out. */
+  /** The Owned filter (ADR-0014). */
   owned: boolean;
 };
 

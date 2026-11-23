@@ -23,11 +23,7 @@ export function createCourseCatalog(database: Db) {
     /**
      * The Published courses matching the query, newest first (at most 50),
      * each with the viewer's progress and badge, plus every category and whether
-     * the Owned filter was applied.
-     *
-     * A badge is "your-course" for the course's Instructor, "locked" for an
-     * Enrollment under Country Lock, "enrolled" for any other Enrollment, and
-     * null otherwise. A Team Licence alone is not an Enrollment.
+     * the Owned filter was applied. Badges and the Owned filter follow ADR-0014.
      */
     browse(viewer: CatalogViewer, query: CatalogQuery) {
       return browseCatalog(database, viewer, query);
