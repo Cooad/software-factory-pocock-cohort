@@ -50,9 +50,7 @@ function writeStored(storage: ThemeStorage, preference: ThemePreference): void {
   try {
     if (preference === "system") storage.removeItem(THEME_STORAGE_KEY);
     else storage.setItem(THEME_STORAGE_KEY, preference);
-  } catch {
-    // Storage can be unavailable (private mode); the choice lasts the page.
-  }
+  } catch {}
 }
 
 export function createThemeStore({

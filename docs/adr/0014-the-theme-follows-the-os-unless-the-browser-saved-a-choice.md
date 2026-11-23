@@ -20,3 +20,6 @@ System.
 ## Consequences
 
 The theme is per browser: a learner who uses two machines picks it on each.
+
+Where the browser refuses storage (some private modes), a choice still
+switches the theme but lasts only until the page reloads.
