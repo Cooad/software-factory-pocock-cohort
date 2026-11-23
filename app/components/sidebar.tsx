@@ -22,6 +22,21 @@ import {
   Settings,
 } from "lucide-react";
 
+const sidebarRowClass =
+  "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors";
+const sidebarIdleClass =
+  "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground";
+const sidebarButtonClass = cn(sidebarRowClass, "w-full", sidebarIdleClass);
+
+function sidebarLinkClass({ isActive }: { isActive: boolean }) {
+  return cn(
+    sidebarRowClass,
+    isActive
+      ? "bg-sidebar-accent text-sidebar-accent-foreground"
+      : sidebarIdleClass
+  );
+}
+
 type CurrentUser = {
   id: number;
   name: string;
@@ -155,34 +170,13 @@ export function Sidebar({
         {navItems
           .filter((item) => isVisible(item, currentUserRole))
           .map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              className={({ isActive }) =>
-                cn(
-                  "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                  isActive
-                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                    : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                )
-              }
-            >
+            <NavLink key={item.to} to={item.to} className={sidebarLinkClass}>
               {item.icon}
               {item.label}
             </NavLink>
           ))}
         {isTeamAdmin && (
-          <NavLink
-            to="/team"
-            className={({ isActive }) =>
-              cn(
-                "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                isActive
-                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                  : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-              )
-            }
-          >
+          <NavLink to="/team" className={sidebarLinkClass}>
             <UsersRound className="size-4" />
             Team
           </NavLink>
@@ -232,35 +226,19 @@ export function Sidebar({
       )}
 
       <div className="border-t border-sidebar-border p-3 space-y-1">
-        <button
-          onClick={toggleDarkMode}
-          className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-        >
+        <button onClick={toggleDarkMode} className={sidebarButtonClass}>
           {isDark ? <Sun className="size-4" /> : <Moon className="size-4" />}
           {isDark ? "Light Mode" : "Dark Mode"}
         </button>
 
         {currentUser && (
           <>
-            <NavLink
-              to="/settings"
-              className={({ isActive }) =>
-                cn(
-                  "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                  isActive
-                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                    : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                )
-              }
-            >
+            <NavLink to="/settings" className={sidebarLinkClass}>
               <Settings className="size-4" />
               Settings
             </NavLink>
             <Form method="post" action="/api/logout">
-              <button
-                type="submit"
-                className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-              >
+              <button type="submit" className={sidebarButtonClass}>
                 <LogOut className="size-4" />
                 Sign out
               </button>
