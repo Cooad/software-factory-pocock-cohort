@@ -99,6 +99,73 @@ export function HydrateFallback() {
   );
 }
 
+type LoaderData = Route.ComponentProps["loaderData"];
+type CatalogFilterValues = Pick<LoaderData, "search" | "category" | "owned">;
+
+function CatalogFilters({
+  categories,
+  signedIn,
+  search,
+  category,
+  owned,
+}: CatalogFilterValues & Pick<LoaderData, "categories" | "signedIn">) {
+  return (
+    <Form method="get" className="mb-8 flex flex-col gap-4 sm:flex-row">
+      <div className="relative flex-1">
+        <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+        <input
+          type="text"
+          name="q"
+          defaultValue={search ?? ""}
+          placeholder="Search courses..."
+          className="h-10 w-full rounded-md border border-input bg-background pl-10 pr-4 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        />
+      </div>
+      <select
+        name="category"
+        defaultValue={category ?? ""}
+        className="h-10 rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <option value="">All Categories</option>
+        {categories.map((cat) => (
+          <option key={cat.id} value={cat.slug}>
+            {cat.name}
+          </option>
+        ))}
+      </select>
+      {signedIn && (
+        <label className="flex h-10 items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            name="owned"
+            value="1"
+            defaultChecked={owned}
+            className="size-4 rounded border-input"
+          />
+          Owned
+        </label>
+      )}
+      <Button type="submit">Search</Button>
+    </Form>
+  );
+}
+
+function NoCourses({ search, category, owned }: CatalogFilterValues) {
+  return (
+    <div className="flex flex-col items-center justify-center py-16 text-center">
+      <BookOpen className="mb-4 size-12 text-muted-foreground/50" />
+      <h2 className="text-lg font-medium">No courses found</h2>
+      <p className="mt-1 text-sm text-muted-foreground">
+        {owned && !search && !category
+          ? "You don't own any courses yet."
+          : search || category || owned
+            ? "Try adjusting your search or filters."
+            : "No published courses are available yet."}
+      </p>
+    </div>
+  );
+}
+
 export default function CourseCatalog({ loaderData }: Route.ComponentProps) {
   const { courses, categories, search, category, owned, signedIn } = loaderData;
   const navigation = useNavigation();
@@ -115,46 +182,14 @@ export default function CourseCatalog({ loaderData }: Route.ComponentProps) {
         </p>
       </div>
 
-      {/* Search and Filter */}
-      <Form method="get" className="mb-8 flex flex-col gap-4 sm:flex-row">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <input
-            type="text"
-            name="q"
-            defaultValue={search ?? ""}
-            placeholder="Search courses..."
-            className="h-10 w-full rounded-md border border-input bg-background pl-10 pr-4 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          />
-        </div>
-        <select
-          name="category"
-          defaultValue={category ?? ""}
-          className="h-10 rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <option value="">All Categories</option>
-          {categories.map((cat) => (
-            <option key={cat.id} value={cat.slug}>
-              {cat.name}
-            </option>
-          ))}
-        </select>
-        {signedIn && (
-          <label className="flex h-10 items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              name="owned"
-              value="1"
-              defaultChecked={owned}
-              className="size-4 rounded border-input"
-            />
-            Owned
-          </label>
-        )}
-        <Button type="submit">Search</Button>
-      </Form>
+      <CatalogFilters
+        categories={categories}
+        search={search}
+        category={category}
+        owned={owned}
+        signedIn={signedIn}
+      />
 
-      {/* Course Grid */}
       {isSearching ? (
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {Array.from({ length: 6 }).map((_, i) => (
@@ -163,17 +198,7 @@ export default function CourseCatalog({ loaderData }: Route.ComponentProps) {
           ))}
         </div>
       ) : courses.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-16 text-center">
-          <BookOpen className="mb-4 size-12 text-muted-foreground/50" />
-          <h2 className="text-lg font-medium">No courses found</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {owned && !search && !category
-              ? "You don't own any courses yet."
-              : search || category || owned
-                ? "Try adjusting your search or filters."
-                : "No published courses are available yet."}
-          </p>
-        </div>
+        <NoCourses search={search} category={category} owned={owned} />
       ) : (
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {courses.map((course) => (
