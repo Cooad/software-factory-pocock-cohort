@@ -1,9 +1,9 @@
 import { useState } from "react";
-import type { Route } from "../../routes/+types/instructor.$courseId";
 import {
   defaultRosterView,
   sortRosterBy,
   viewRoster,
+  type RosterStudent,
   type RosterView,
 } from "~/modules/course-roster";
 import { RosterFilters } from "~/components/course-editor/roster-filters";
@@ -11,13 +11,11 @@ import { RosterTable } from "~/components/course-editor/roster-table";
 import { Card, CardContent } from "~/components/ui/card";
 import { Award, Users } from "lucide-react";
 
-type Student = Route.ComponentProps["loaderData"]["students"][number];
-
 export function StudentsTab({
   students,
   quizCount,
 }: {
-  students: Student[];
+  students: RosterStudent[];
   quizCount: number;
 }) {
   return (
@@ -56,7 +54,7 @@ function Roster({
   students,
   quizCount,
 }: {
-  students: Student[];
+  students: RosterStudent[];
   quizCount: number;
 }) {
   const [view, setView] = useState<RosterView>(defaultRosterView);

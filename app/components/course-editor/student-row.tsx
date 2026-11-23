@@ -1,8 +1,9 @@
-import type { Route } from "../../routes/+types/instructor.$courseId";
 import { LessonProgressStatus } from "~/db/schema";
-import { rosterStatus } from "~/modules/course-roster";
-
-type Student = Route.ComponentProps["loaderData"]["students"][number];
+import {
+  rosterStatus,
+  type QuizScore,
+  type RosterStudent,
+} from "~/modules/course-roster";
 
 export const statusLabels: Record<LessonProgressStatus, string> = {
   [LessonProgressStatus.NotStarted]: "Not Started",
@@ -23,7 +24,7 @@ export function StudentRow({
   student,
   quizCount,
 }: {
-  student: Student;
+  student: RosterStudent;
   quizCount: number;
 }) {
   const enrolledDate = new Date(student.enrolledAt).toLocaleDateString(
@@ -70,7 +71,7 @@ export function StudentRow({
   );
 }
 
-function QuizScores({ scores }: { scores: Student["quizScores"] }) {
+function QuizScores({ scores }: { scores: QuizScore[] }) {
   return (
     <div className="flex flex-wrap gap-2">
       {scores.map((qs) => (

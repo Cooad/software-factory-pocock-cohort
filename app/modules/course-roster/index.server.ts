@@ -1,12 +1,7 @@
 import { db } from "~/db";
 import { getCourseRoster, type Db } from "./lib/roster-query";
 
-export type {
-  CourseRoster,
-  QuizScore,
-  RosterQuiz,
-  RosterStudent,
-} from "./lib/roster-query";
+export type { CourseRoster } from "./lib/roster-query";
 
 /**
  * The students of a course, bound to a database. The app uses

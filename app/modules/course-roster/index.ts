@@ -8,3 +8,8 @@ export {
   type RosterView,
   type SortDirection,
 } from "./lib/roster-view";
+export type {
+  QuizScore,
+  RosterQuiz,
+  RosterStudent,
+} from "./lib/roster-query";

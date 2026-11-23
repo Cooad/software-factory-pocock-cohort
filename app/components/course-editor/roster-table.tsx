@@ -1,10 +1,11 @@
-import type { Route } from "../../routes/+types/instructor.$courseId";
-import type { RosterSortKey, RosterView } from "~/modules/course-roster";
+import type {
+  RosterSortKey,
+  RosterStudent,
+  RosterView,
+} from "~/modules/course-roster";
 import { StudentRow } from "~/components/course-editor/student-row";
 import { Card, CardContent } from "~/components/ui/card";
 import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
-
-type Student = Route.ComponentProps["loaderData"]["students"][number];
 
 const headerClass =
   "px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground";
@@ -21,7 +22,7 @@ export function RosterTable({
   view,
   onSort,
 }: {
-  students: Student[];
+  students: RosterStudent[];
   quizCount: number;
   view: RosterView;
   onSort: (sortBy: RosterSortKey) => void;
