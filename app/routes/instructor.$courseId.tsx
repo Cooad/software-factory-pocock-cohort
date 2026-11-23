@@ -402,7 +402,7 @@ export default function InstructorCourseEditor({
         </TabsContent>
 
         <TabsContent value="sales-copy" className="mt-6">
-          <SalesCopyTab course={course} />
+          <SalesCopyTab key={course.id} course={course} />
         </TabsContent>
 
         <TabsContent value="students" className="mt-6">

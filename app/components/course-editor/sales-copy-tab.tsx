@@ -1,13 +1,13 @@
 import { useState } from "react";
 import { useFetcher } from "react-router";
 import type { Route } from "../../routes/+types/instructor.$courseId";
-
-type Course = Route.ComponentProps["loaderData"]["course"];
 import { MonacoMarkdownEditor } from "~/components/monaco-markdown-editor";
 import { Card, CardContent, CardHeader } from "~/components/ui/card";
 import { Button } from "~/components/ui/button";
 import { Save } from "lucide-react";
 import { useFetcherToast } from "~/components/course-editor/use-fetcher-toast";
+
+type Course = Route.ComponentProps["loaderData"]["course"];
 
 export function SalesCopyTab({ course }: { course: Course }) {
   const salesCopyFetcher = useFetcher();
