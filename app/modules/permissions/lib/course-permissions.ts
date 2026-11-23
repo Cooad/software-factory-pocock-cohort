@@ -256,7 +256,6 @@ export function findCountryLockedCourseIds(
   candidates: PricedCourse[]
 ): Set<number> {
   const lockable = candidates.filter((course) => !mayManage(person, course));
-  if (lockable.length === 0) return new Set();
   const courseIds = lockable.map((course) => course.id);
 
   const enrolled = db

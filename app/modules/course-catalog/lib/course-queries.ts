@@ -83,7 +83,6 @@ export function getLessonCounts(
   db: Db,
   courseIds: number[]
 ): Map<number, number> {
-  if (courseIds.length === 0) return new Map();
   const rows = db
     .select({ courseId: modules.courseId, count: sql<number>`count(*)` })
     .from(lessons)
@@ -122,7 +121,6 @@ export function getCompletedLessonCounts(
   userId: number,
   courseIds: number[]
 ): Map<number, number> {
-  if (courseIds.length === 0) return new Map();
   const rows = db
     .select({ courseId: modules.courseId, count: sql<number>`count(*)` })
     .from(lessonProgress)
