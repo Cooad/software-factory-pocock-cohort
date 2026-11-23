@@ -15,24 +15,27 @@ import type {
   CatalogCourse,
 } from "~/modules/course-catalog/index.server";
 
-const BADGE_LABELS = {
-  "your-course": "Your Course",
-  enrolled: "Enrolled",
-  locked: "Locked",
+const PRIMARY_TONE = "bg-primary/10 text-primary";
+
+const BADGES = {
+  "your-course": { label: "Your Course", tone: PRIMARY_TONE, locked: false },
+  enrolled: { label: "Enrolled", tone: PRIMARY_TONE, locked: false },
+  locked: {
+    label: "Locked",
+    tone: "bg-destructive/10 text-destructive",
+    locked: true,
+  },
 } as const;
 
 function CourseBadge({ badge }: { badge: CatalogBadge }) {
   if (!badge) return null;
-  const tone =
-    badge === "locked"
-      ? "bg-destructive/10 text-destructive"
-      : "bg-primary/10 text-primary";
+  const { label, tone, locked } = BADGES[badge];
   return (
     <span
       className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${tone}`}
     >
-      {badge === "locked" && <Lock className="size-3" />}
-      {BADGE_LABELS[badge]}
+      {locked && <Lock className="size-3" />}
+      {label}
     </span>
   );
 }
