@@ -7,7 +7,7 @@ import {
   defaultNotifications,
   tolerateNotificationFailure,
 } from "~/lib/notifications.server";
-import { Toaster } from "sonner";
+import { ThemedToaster } from "~/components/themed-toaster";
 import { getCurrentUserId, getDevCountry } from "~/lib/session";
 import { getCountryTierInfo, COUNTRIES } from "~/lib/ppp";
 import { eq, and, or, sql, desc } from "drizzle-orm";
@@ -267,7 +267,7 @@ export default function AppLayout({ loaderData }: Route.ComponentProps) {
           countryTierInfo={countryTierInfo}
           countries={countries}
         />
-        <Toaster position="bottom-right" richColors closeButton />
+        <ThemedToaster />
       </div>
     </NotificationFeedProvider>
   );
