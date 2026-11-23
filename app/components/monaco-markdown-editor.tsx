@@ -7,6 +7,7 @@ import {
 } from "react";
 import type { EditorProps, OnMount } from "@monaco-editor/react";
 import type * as Monaco from "monaco-editor";
+import { markdownEditorOptions } from "~/lib/markdown-editor-options";
 
 type MonacoMarkdownEditorProps = {
   value: string;
@@ -113,24 +114,7 @@ export function MonacoMarkdownEditor({
         defaultValue={value}
         onChange={(v) => onChange(v ?? "")}
         onMount={handleMount}
-        options={{
-          minimap: { enabled: false },
-          wordWrap: "on",
-          lineNumbers: "on",
-          scrollBeyondLastLine: false,
-          fontSize: 14,
-          fontFamily: "ui-monospace, monospace",
-          padding: { top: 16, bottom: 16 },
-          renderLineHighlight: "line",
-          overviewRulerLanes: 0,
-          hideCursorInOverviewRuler: true,
-          overviewRulerBorder: false,
-          scrollbar: {
-            verticalScrollbarSize: 8,
-            horizontalScrollbarSize: 8,
-          },
-          contextmenu: false,
-        }}
+        options={markdownEditorOptions}
       />
     </div>
   );
