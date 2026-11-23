@@ -5,9 +5,16 @@ import {
   useEffect,
   type ComponentType,
 } from "react";
-import type { EditorProps, OnMount } from "@monaco-editor/react";
+import type { BeforeMount, EditorProps, OnMount } from "@monaco-editor/react";
 import type * as Monaco from "monaco-editor";
 import { monacoMarkdownEditorOptions } from "~/components/monaco-markdown-editor-options";
+import {
+  defineMonacoThemes,
+  monacoThemeName,
+} from "~/components/monaco-markdown-editor-themes";
+import { useTheme } from "~/modules/theme/use-theme";
+
+const handleBeforeMount: BeforeMount = (monaco) => defineMonacoThemes(monaco);
 
 type MonacoMarkdownEditorProps = {
   value: string;
@@ -26,6 +33,7 @@ export function MonacoMarkdownEditor({
   onChangeRef.current = onChange;
   onSaveRef.current = onSave;
 
+  const { resolved: theme } = useTheme();
   const [Editor, setEditor] = useState<ComponentType<EditorProps> | null>(null);
 
   useEffect(() => {
@@ -36,27 +44,6 @@ export function MonacoMarkdownEditor({
 
   const handleMount: OnMount = useCallback((editor, monaco) => {
     editorRef.current = editor;
-
-    monaco.editor.defineTheme("cadence-dark", {
-      base: "vs-dark",
-      inherit: true,
-      rules: [],
-      colors: {
-        "editor.background": "#0a0a0a",
-        "editor.foreground": "#e5e5e5",
-        "editorLineNumber.foreground": "#525252",
-        "editorLineNumber.activeForeground": "#a3a3a3",
-        "editor.selectionBackground": "#262626",
-        "editor.lineHighlightBackground": "#171717",
-        "editorCursor.foreground": "#e5e5e5",
-        "editorWidget.background": "#171717",
-        "editorWidget.border": "#262626",
-        "input.background": "#171717",
-        "input.border": "#262626",
-        focusBorder: "#525252",
-      },
-    });
-    monaco.editor.setTheme("cadence-dark");
 
     // Register Prettier as Monaco's native document formatter for Markdown
     monaco.languages.registerDocumentFormattingEditProvider("markdown", {
@@ -113,7 +100,9 @@ export function MonacoMarkdownEditor({
         defaultLanguage="markdown"
         defaultValue={value}
         onChange={(v) => onChange(v ?? "")}
+        beforeMount={handleBeforeMount}
         onMount={handleMount}
+        theme={monacoThemeName(theme)}
         options={monacoMarkdownEditorOptions}
       />
     </div>

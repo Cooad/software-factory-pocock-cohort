@@ -1,5 +1,4 @@
 import { Link } from "react-router";
-import { useState, useEffect } from "react";
 import type { Route } from "./+types/home";
 import { Button } from "~/components/ui/button";
 import {
@@ -9,17 +8,10 @@ import {
   CardHeader,
 } from "~/components/ui/card";
 import { CourseStatus } from "~/db/schema";
-import {
-  BookOpen,
-  GraduationCap,
-  Users,
-  ArrowRight,
-  User,
-  Moon,
-  Sun,
-} from "lucide-react";
+import { BookOpen, GraduationCap, Users, ArrowRight, User } from "lucide-react";
 import { CourseImage } from "~/components/course-image";
 import { DevUI } from "~/components/dev-ui";
+import { ThemeSwitcher } from "~/components/theme-switcher";
 import { getCurrentUserId, getDevCountry } from "~/lib/session";
 import { getCountryTierInfo, COUNTRIES } from "~/lib/ppp";
 import { eq, like, and, or, sql } from "drizzle-orm";
@@ -173,21 +165,6 @@ export default function Home({ loaderData }: Route.ComponentProps) {
     countryTierInfo,
     countries,
   } = loaderData;
-  const [isDark, setIsDark] = useState(false);
-
-  useEffect(() => {
-    setIsDark(document.documentElement.classList.contains("dark"));
-  }, []);
-
-  function toggleDarkMode() {
-    const next = !isDark;
-    setIsDark(next);
-    document.documentElement.classList.toggle("dark", next);
-    try {
-      localStorage.setItem("cadence-theme", next ? "dark" : "light");
-    } catch {}
-  }
-
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b border-border">
@@ -202,17 +179,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
             >
               Courses
             </Link>
-            <button
-              onClick={toggleDarkMode}
-              className="rounded-md p-2 text-muted-foreground transition-colors hover:text-foreground"
-              title={isDark ? "Switch to light mode" : "Switch to dark mode"}
-            >
-              {isDark ? (
-                <Sun className="size-4" />
-              ) : (
-                <Moon className="size-4" />
-              )}
-            </button>
+            <ThemeSwitcher />
             {currentUser ? (
               <Button asChild size="sm">
                 <Link to="/dashboard">Dashboard</Link>
