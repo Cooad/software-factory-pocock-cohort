@@ -41,7 +41,7 @@ export async function loader({ request, url }: Route.LoaderArgs) {
   const person = await people.getPerson(request);
   const country = await resolveCountry(request);
 
-  const { courses, categories } = courseCatalog.browse(
+  const { courses, categories, owned } = courseCatalog.browse(
     { person, country },
     { search: params.q, category: params.category, owned: params.owned }
   );
@@ -51,7 +51,7 @@ export async function loader({ request, url }: Route.LoaderArgs) {
     categories,
     search: params.q,
     category: params.category,
-    owned: params.owned && person !== null,
+    owned,
     signedIn: person !== null,
   };
 }

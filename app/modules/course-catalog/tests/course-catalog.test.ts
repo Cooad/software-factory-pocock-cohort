@@ -240,6 +240,15 @@ describe("browse: owned filter", () => {
 
   it("is ignored when signed out", () => {
     expect(titles(null, OWNED)).toEqual(["Test Course"]);
+    expect(catalog.browse({ person: null, country: null }, OWNED).owned).toBe(
+      false
+    );
+  });
+
+  it("says it was applied for a signed-in viewer", () => {
+    const viewer = { person: student(), country: null };
+    expect(catalog.browse(viewer, OWNED).owned).toBe(true);
+    expect(catalog.browse(viewer, ALL).owned).toBe(false);
   });
 
   it("combines with the search", () => {

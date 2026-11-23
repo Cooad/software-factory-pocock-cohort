@@ -118,6 +118,7 @@ export function browseCatalog(
       };
     }),
     categories: getAllCategories(db),
+    owned,
   };
 }
 

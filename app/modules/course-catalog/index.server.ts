@@ -22,7 +22,8 @@ export function createCourseCatalog(database: Db) {
   return {
     /**
      * The Published courses matching the query, newest first (at most 50),
-     * each with the viewer's progress and badge, plus every category.
+     * each with the viewer's progress and badge, plus every category and whether
+     * the Owned filter was applied.
      *
      * A badge is "your-course" for the course's Instructor, "locked" for an
      * Enrollment under Country Lock, "enrolled" for any other Enrollment, and
