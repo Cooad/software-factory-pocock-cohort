@@ -7,7 +7,7 @@ import {
 } from "react";
 import type { EditorProps, OnMount } from "@monaco-editor/react";
 import type * as Monaco from "monaco-editor";
-import { markdownEditorOptions } from "~/lib/markdown-editor-options";
+import { monacoMarkdownEditorOptions } from "~/components/monaco-markdown-editor-options";
 
 type MonacoMarkdownEditorProps = {
   value: string;
@@ -114,7 +114,7 @@ export function MonacoMarkdownEditor({
         defaultValue={value}
         onChange={(v) => onChange(v ?? "")}
         onMount={handleMount}
-        options={markdownEditorOptions}
+        options={monacoMarkdownEditorOptions}
       />
     </div>
   );

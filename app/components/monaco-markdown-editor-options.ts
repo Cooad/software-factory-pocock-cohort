@@ -1,6 +1,6 @@
 import type * as Monaco from "monaco-editor";
 
-export const markdownEditorOptions: Monaco.editor.IStandaloneEditorConstructionOptions =
+export const monacoMarkdownEditorOptions: Monaco.editor.IStandaloneEditorConstructionOptions =
   {
     minimap: { enabled: false },
     wordWrap: "on",
