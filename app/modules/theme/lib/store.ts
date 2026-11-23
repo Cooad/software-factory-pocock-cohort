@@ -65,9 +65,13 @@ export function createThemeStore({
     return { preference, resolved: resolveTheme(preference, media.matches) };
   }
 
+  function applyTheme(resolved: ResolvedTheme): void {
+    root.classList.toggle("dark", resolved === "dark");
+  }
+
   function update(preference: ThemePreference): void {
     const next = computeState(preference);
-    root.classList.toggle("dark", next.resolved === "dark");
+    applyTheme(next.resolved);
     if (
       next.preference === state.preference &&
       next.resolved === state.resolved
@@ -78,7 +82,7 @@ export function createThemeStore({
     for (const listener of listeners) listener();
   }
 
-  root.classList.toggle("dark", state.resolved === "dark");
+  applyTheme(state.resolved);
   media.addEventListener("change", () => update(state.preference));
 
   return {
