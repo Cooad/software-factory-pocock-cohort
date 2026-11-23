@@ -9,12 +9,13 @@ import {
 } from "react-router";
 
 import type { Route } from "./+types/root";
+import { THEME_STORAGE_KEY } from "~/modules/theme";
 import "./app.css";
 
 const darkModeScript = `
 (function() {
   try {
-    var theme = localStorage.getItem('cadence-theme');
+    var theme = localStorage.getItem('${THEME_STORAGE_KEY}');
     if (theme === 'dark') {
       document.documentElement.classList.add('dark');
     }
