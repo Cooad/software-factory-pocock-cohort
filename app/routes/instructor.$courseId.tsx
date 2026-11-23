@@ -9,7 +9,6 @@ import {
   deleteLesson,
   deleteModule,
   getCourseWithDetails,
-  getEnrollmentCountForCourse,
   getLessonById,
   getLessonCountForCourse,
   getModuleById,
@@ -134,10 +133,9 @@ export async function loader({ params, request }: Route.LoaderArgs) {
   }
 
   const lessonCount = getLessonCountForCourse(courseId);
-  const enrollmentCount = getEnrollmentCountForCourse(courseId);
   const { students, quizCount } = courseRoster.get(courseId);
 
-  return { course, lessonCount, enrollmentCount, students, quizCount };
+  return { course, lessonCount, students, quizCount };
 }
 
 export async function action({ params, request }: Route.ActionArgs) {
@@ -330,8 +328,8 @@ export async function action({ params, request }: Route.ActionArgs) {
 export default function InstructorCourseEditor({
   loaderData,
 }: Route.ComponentProps) {
-  const { course, lessonCount, enrollmentCount, students, quizCount } =
-    loaderData;
+  const { course, lessonCount, students, quizCount } = loaderData;
+  const enrollmentCount = students.length;
 
   return (
     <div className="mx-auto max-w-7xl p-6 lg:p-8">

@@ -1,14 +1,7 @@
 import { markdown } from "~/lib/text";
 import { CourseStatus } from "~/db/schema";
 import { db } from "~/db";
-import {
-  courses,
-  categories,
-  users,
-  modules,
-  lessons,
-  enrollments,
-} from "~/db/schema";
+import { courses, categories, users, modules, lessons } from "~/db/schema";
 import { eq, and, or, sql, gt, gte } from "drizzle-orm";
 
 export function getCourseWithDetails(id: number) {
@@ -291,14 +284,4 @@ export function moveLessonToModule(
     .where(eq(lessons.id, lessonId))
     .returning()
     .get();
-}
-
-export function getEnrollmentCountForCourse(courseId: number) {
-  const result = db
-    .select({ count: sql<number>`count(*)` })
-    .from(enrollments)
-    .where(eq(enrollments.courseId, courseId))
-    .get();
-
-  return result?.count ?? 0;
 }
