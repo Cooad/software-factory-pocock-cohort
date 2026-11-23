@@ -2,7 +2,7 @@ import { calculatePppPrice } from "~/lib/ppp";
 import { createCoursePermissions } from "~/modules/permissions/course-permissions.server";
 import type { Person } from "~/modules/permissions/person.server";
 import {
-  buildCourseQuery,
+  findPublishedCourses,
   getAllCategories,
   getCompletedLessonCounts,
   getCourseRatingSummaries,
@@ -84,7 +84,7 @@ export function browseCatalog(
   const enrolledIds = enrolledCourseIds(db, person);
   const owned = query.owned && person !== null;
 
-  const courses = buildCourseQuery(db, {
+  const courses = findPublishedCourses(db, {
     search: query.search,
     category: query.category,
     onlyCourseIds: owned ? [...enrolledIds] : null,

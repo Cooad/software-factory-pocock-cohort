@@ -49,7 +49,7 @@ function courseConditions(filter: CourseFilter) {
 }
 
 /** Published courses matching the filter, newest first, at most 50. */
-export function buildCourseQuery(db: Db, filter: CourseFilter) {
+export function findPublishedCourses(db: Db, filter: CourseFilter) {
   return db
     .select({
       id: coursesTable.id,
