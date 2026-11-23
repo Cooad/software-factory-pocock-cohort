@@ -10,17 +10,8 @@ import {
 
 import type { Route } from "./+types/root";
 import "./app.css";
-
-const darkModeScript = `
-(function() {
-  try {
-    var theme = localStorage.getItem('cadence-theme');
-    if (theme === 'dark') {
-      document.documentElement.classList.add('dark');
-    }
-  } catch (e) {}
-})();
-`;
+import { themeBootScript } from "~/modules/theme/boot-script";
+import { useFollowSystemTheme } from "~/modules/theme/use-theme";
 
 export const links: Route.LinksFunction = () => [
   { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" },
@@ -43,7 +34,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         {/* oxlint-disable-next-line react/no-danger -- a constant script, not user input */}
-        <script dangerouslySetInnerHTML={{ __html: darkModeScript }} />
+        <script dangerouslySetInnerHTML={{ __html: themeBootScript }} />
         <Meta />
         <Links />
       </head>
@@ -71,6 +62,7 @@ function NavigationLoadingBar() {
 }
 
 export default function App() {
+  useFollowSystemTheme();
   return (
     <>
       <NavigationLoadingBar />
