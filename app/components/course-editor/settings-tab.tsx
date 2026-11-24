@@ -13,6 +13,7 @@ import {
 } from "~/components/ui/select";
 import { Eye, Globe } from "lucide-react";
 import { useFetcherToast } from "~/components/course-editor/use-fetcher-toast";
+import { priceInCentsSchema } from "~/lib/price";
 
 type Course = Route.ComponentProps["loaderData"]["course"];
 
@@ -104,12 +105,8 @@ function PriceField({ price }: { price: number }) {
           defaultValue={(price / 100).toFixed(2)}
           className="w-28"
           onBlur={(event) => {
-            const value = parseFloat(event.target.value);
-            if (
-              !isNaN(value) &&
-              value >= 0 &&
-              Math.round(value * 100) !== price
-            ) {
+            const typed = priceInCentsSchema.safeParse(event.target.value);
+            if (!typed.success || typed.data !== price) {
               priceFetcher.submit(
                 { intent: "update-price", price: event.target.value },
                 { method: "post" }

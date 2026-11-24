@@ -45,6 +45,7 @@ import { data, isRouteErrorResponse } from "react-router";
 import { z } from "zod";
 import { parseFormData } from "~/lib/validation";
 import { normaliseSalesCopy } from "~/lib/sales-copy";
+import { priceInCentsSchema } from "~/lib/price";
 
 const courseEditorActionSchema = z.discriminatedUnion("intent", [
   z.object({
@@ -59,7 +60,7 @@ const courseEditorActionSchema = z.discriminatedUnion("intent", [
     intent: z.literal("update-status"),
     status: z.nativeEnum(CourseStatus),
   }),
-  z.object({ intent: z.literal("update-price"), price: z.string() }),
+  z.object({ intent: z.literal("update-price"), price: priceInCentsSchema }),
   z.object({ intent: z.literal("update-ppp-enabled"), pppEnabled: z.string() }),
   z.object({
     intent: z.literal("add-module"),
@@ -183,18 +184,7 @@ export async function action({ params, request }: Route.ActionArgs) {
   }
 
   if (intent === "update-price") {
-    const priceDollars = parseFloat(parsed.data.price);
-    if (isNaN(priceDollars) || priceDollars < 0) {
-      return data(
-        { error: "Price must be a non-negative number." },
-        { status: 400 }
-      );
-    }
-    if (priceDollars > 9999.99) {
-      return data({ error: "Price cannot exceed $9,999.99." }, { status: 400 });
-    }
-    const priceCents = Math.round(priceDollars * 100);
-    updateCoursePrice(courseId, priceCents, now);
+    updateCoursePrice(courseId, parsed.data.price, now);
     return { success: true, field: "price" };
   }
 
