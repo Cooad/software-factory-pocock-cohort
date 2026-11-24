@@ -3,7 +3,7 @@ import {
   defaultRosterView,
   sortRosterBy,
   viewRoster,
-  type RosterStudent,
+  type CourseRoster,
   type RosterView,
 } from "~/modules/course-roster";
 import { RosterFilters } from "~/components/course-editor/roster-filters";
@@ -11,13 +11,8 @@ import { RosterTable } from "~/components/course-editor/roster-table";
 import { Card, CardContent } from "~/components/ui/card";
 import { Award, Users } from "lucide-react";
 
-export function StudentsTab({
-  students,
-  quizCount,
-}: {
-  students: RosterStudent[];
-  quizCount: number;
-}) {
+export function StudentsTab({ roster }: { roster: CourseRoster }) {
+  const { students, quizCount } = roster;
   return (
     <>
       <div className="mb-4 flex items-center gap-4 text-sm text-muted-foreground">
@@ -44,19 +39,14 @@ export function StudentsTab({
           </CardContent>
         </Card>
       ) : (
-        <Roster students={students} quizCount={quizCount} />
+        <Roster roster={roster} />
       )}
     </>
   );
 }
 
-function Roster({
-  students,
-  quizCount,
-}: {
-  students: RosterStudent[];
-  quizCount: number;
-}) {
+function Roster({ roster }: { roster: CourseRoster }) {
+  const { students, quizCount } = roster;
   const [view, setView] = useState<RosterView>(defaultRosterView);
   const shown = viewRoster(students, view);
 

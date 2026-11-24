@@ -10,6 +10,7 @@ export {
   type SortDirection,
 } from "./lib/roster-view";
 export type {
+  CourseRoster,
   QuizScore,
   RosterQuiz,
   RosterStudent,

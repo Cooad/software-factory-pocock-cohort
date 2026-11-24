@@ -135,9 +135,9 @@ export async function loader({ params, request }: Route.LoaderArgs) {
   }
 
   const lessonCount = getLessonCountForCourse(courseId);
-  const { students, quizCount } = courseRoster.get(courseId);
+  const roster = courseRoster.get(courseId);
 
-  return { course, lessonCount, students, quizCount };
+  return { course, lessonCount, roster };
 }
 
 export async function action({ params, request }: Route.ActionArgs) {
@@ -326,8 +326,8 @@ export async function action({ params, request }: Route.ActionArgs) {
 export default function InstructorCourseEditor({
   loaderData,
 }: Route.ComponentProps) {
-  const { course, lessonCount, students, quizCount } = loaderData;
-  const enrollmentCount = students.length;
+  const { course, lessonCount, roster } = loaderData;
+  const enrollmentCount = roster.students.length;
 
   return (
     <div className="mx-auto max-w-7xl p-6 lg:p-8">
@@ -406,7 +406,7 @@ export default function InstructorCourseEditor({
         </TabsContent>
 
         <TabsContent value="students" className="mt-6">
-          <StudentsTab students={students} quizCount={quizCount} />
+          <StudentsTab roster={roster} />
         </TabsContent>
       </Tabs>
     </div>
