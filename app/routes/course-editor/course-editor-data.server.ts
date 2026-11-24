@@ -80,25 +80,37 @@ export function getLessonCountForCourse(courseId: number) {
   return count?.count ?? 0;
 }
 
-export function updateCourse(id: number, title: string, description: string) {
+export function updateCourse(
+  id: number,
+  { title, description }: { title: string; description: string },
+  now: Date
+) {
   return db
     .update(courses)
-    .set({ title, description, updatedAt: new Date().toISOString() })
+    .set({ title, description, updatedAt: now.toISOString() })
     .where(eq(courses.id, id))
     .returning()
     .get();
 }
 
-export function updateCourseStatus(id: number, status: CourseStatus) {
+export function updateCourseStatus(
+  id: number,
+  status: CourseStatus,
+  now: Date
+) {
   return db
     .update(courses)
-    .set({ status, updatedAt: new Date().toISOString() })
+    .set({ status, updatedAt: now.toISOString() })
     .where(eq(courses.id, id))
     .returning()
     .get();
 }
 
-export function updateCourseSalesCopy(id: number, salesCopy: string) {
+export function updateCourseSalesCopy(
+  id: number,
+  salesCopy: string,
+  now: Date
+) {
   if (salesCopy.trim().length === 0) {
     throw new Error("Sales copy cannot be empty");
   }
@@ -107,26 +119,30 @@ export function updateCourseSalesCopy(id: number, salesCopy: string) {
     .update(courses)
     .set({
       salesCopy: markdown(salesCopy),
-      updatedAt: new Date().toISOString(),
+      updatedAt: now.toISOString(),
     })
     .where(eq(courses.id, id))
     .returning()
     .get();
 }
 
-export function updateCoursePrice(id: number, price: number) {
+export function updateCoursePrice(id: number, price: number, now: Date) {
   return db
     .update(courses)
-    .set({ price, updatedAt: new Date().toISOString() })
+    .set({ price, updatedAt: now.toISOString() })
     .where(eq(courses.id, id))
     .returning()
     .get();
 }
 
-export function updateCoursePppEnabled(id: number, pppEnabled: boolean) {
+export function updateCoursePppEnabled(
+  id: number,
+  pppEnabled: boolean,
+  now: Date
+) {
   return db
     .update(courses)
-    .set({ pppEnabled, updatedAt: new Date().toISOString() })
+    .set({ pppEnabled, updatedAt: now.toISOString() })
     .where(eq(courses.id, id))
     .returning()
     .get();

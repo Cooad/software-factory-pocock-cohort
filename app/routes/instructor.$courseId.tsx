@@ -157,19 +157,28 @@ export async function action({ params, request }: Route.ActionArgs) {
   }
 
   const { intent } = parsed.data;
+  const now = new Date();
 
   if (intent === "update-title") {
-    updateCourse(courseId, parsed.data.title, course.description);
+    updateCourse(
+      courseId,
+      { title: parsed.data.title, description: course.description },
+      now
+    );
     return { success: true, field: "title" };
   }
 
   if (intent === "update-description") {
-    updateCourse(courseId, course.title, parsed.data.description);
+    updateCourse(
+      courseId,
+      { title: course.title, description: parsed.data.description },
+      now
+    );
     return { success: true, field: "description" };
   }
 
   if (intent === "update-status") {
-    updateCourseStatus(courseId, parsed.data.status);
+    updateCourseStatus(courseId, parsed.data.status, now);
     return { success: true, field: "status" };
   }
 
@@ -185,13 +194,13 @@ export async function action({ params, request }: Route.ActionArgs) {
       return data({ error: "Price cannot exceed $9,999.99." }, { status: 400 });
     }
     const priceCents = Math.round(priceDollars * 100);
-    updateCoursePrice(courseId, priceCents);
+    updateCoursePrice(courseId, priceCents, now);
     return { success: true, field: "price" };
   }
 
   if (intent === "update-ppp-enabled") {
     const pppEnabled = parsed.data.pppEnabled === "true";
-    updateCoursePppEnabled(courseId, pppEnabled);
+    updateCoursePppEnabled(courseId, pppEnabled, now);
     return { success: true, field: "ppp-enabled" };
   }
 
@@ -318,7 +327,7 @@ export async function action({ params, request }: Route.ActionArgs) {
   }
 
   if (intent === "update-sales-copy") {
-    updateCourseSalesCopy(courseId, parsed.data.salesCopy);
+    updateCourseSalesCopy(courseId, parsed.data.salesCopy, now);
     return { success: true, field: "sales-copy" };
   }
 
