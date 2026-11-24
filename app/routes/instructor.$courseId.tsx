@@ -46,6 +46,7 @@ import { z } from "zod";
 import { parseFormData } from "~/lib/validation";
 import { normaliseSalesCopy } from "~/lib/sales-copy";
 import { priceInCentsSchema } from "~/lib/price";
+import { idListSchema } from "~/lib/id-list";
 
 const courseEditorActionSchema = z.discriminatedUnion("intent", [
   z.object({
@@ -87,12 +88,12 @@ const courseEditorActionSchema = z.discriminatedUnion("intent", [
   }),
   z.object({
     intent: z.literal("reorder-modules"),
-    moduleIds: z.string().min(1, "Missing module IDs."),
+    moduleIds: idListSchema("Missing module IDs."),
   }),
   z.object({
     intent: z.literal("reorder-lessons"),
     moduleId: z.coerce.number().int(),
-    lessonIds: z.string().min(1, "Missing lesson IDs."),
+    lessonIds: idListSchema("Missing lesson IDs."),
   }),
   z.object({
     intent: z.literal("move-lesson"),
@@ -256,13 +257,12 @@ export async function action({ params, request }: Route.ActionArgs) {
   }
 
   if (intent === "reorder-modules") {
-    const moduleIds: number[] = JSON.parse(parsed.data.moduleIds);
-    reorderModules(courseId, moduleIds);
+    reorderModules(courseId, parsed.data.moduleIds);
     return { success: true, field: "module-reorder" };
   }
 
   if (intent === "reorder-lessons") {
-    const { moduleId, lessonIds: lessonIdsJson } = parsed.data;
+    const { moduleId, lessonIds } = parsed.data;
     const mod = getModuleById(moduleId);
     if (!mod || mod.courseId !== courseId) {
       return data(
@@ -270,7 +270,6 @@ export async function action({ params, request }: Route.ActionArgs) {
         { status: 404 }
       );
     }
-    const lessonIds: number[] = JSON.parse(lessonIdsJson);
     reorderLessons(moduleId, lessonIds);
     return { success: true, field: "lesson-reorder" };
   }
