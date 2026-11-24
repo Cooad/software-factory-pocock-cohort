@@ -7,12 +7,11 @@ import { z } from "zod";
 export function idListSchema(message: string) {
   return z
     .string()
-    .transform((text, context): unknown => {
+    .transform((text): unknown => {
       try {
         return JSON.parse(text);
       } catch {
-        context.addIssue({ code: z.ZodIssueCode.custom, message });
-        return z.NEVER;
+        return undefined;
       }
     })
     .pipe(
