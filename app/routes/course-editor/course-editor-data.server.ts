@@ -152,7 +152,7 @@ export function getModuleById(id: number) {
   return db.select().from(modules).where(eq(modules.id, id)).get();
 }
 
-export function getModulesByCourse(courseId: number) {
+function getModulesByCourse(courseId: number) {
   return db
     .select()
     .from(modules)
@@ -215,7 +215,7 @@ export function getLessonById(id: number) {
   return db.select().from(lessons).where(eq(lessons.id, id)).get();
 }
 
-export function getLessonsByModule(moduleId: number) {
+function getLessonsByModule(moduleId: number) {
   return db
     .select()
     .from(lessons)
