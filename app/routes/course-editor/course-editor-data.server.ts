@@ -175,18 +175,23 @@ export function updateModuleTitle(id: number, title: string) {
 }
 
 export function deleteModule(id: number) {
-  // Delete all lessons in this module first
-  db.delete(lessons).where(eq(lessons.moduleId, id)).run();
-  return db.delete(modules).where(eq(modules.id, id)).returning().get();
+  return db.transaction((tx) => {
+    tx.delete(lessons).where(eq(lessons.moduleId, id)).run();
+    return tx.delete(modules).where(eq(modules.id, id)).returning().get();
+  });
 }
 
 export function reorderModules(courseId: number, moduleIds: number[]) {
-  for (let i = 0; i < moduleIds.length; i++) {
-    db.update(modules)
-      .set({ position: i + 1 })
-      .where(and(eq(modules.id, moduleIds[i]), eq(modules.courseId, courseId)))
-      .run();
-  }
+  db.transaction((tx) => {
+    for (let i = 0; i < moduleIds.length; i++) {
+      tx.update(modules)
+        .set({ position: i + 1 })
+        .where(
+          and(eq(modules.id, moduleIds[i]), eq(modules.courseId, courseId))
+        )
+        .run();
+    }
+  });
   return getModulesByCourse(courseId);
 }
 
@@ -236,12 +241,16 @@ export function deleteLesson(id: number) {
 }
 
 export function reorderLessons(moduleId: number, lessonIds: number[]) {
-  for (let i = 0; i < lessonIds.length; i++) {
-    db.update(lessons)
-      .set({ position: i + 1 })
-      .where(and(eq(lessons.id, lessonIds[i]), eq(lessons.moduleId, moduleId)))
-      .run();
-  }
+  db.transaction((tx) => {
+    for (let i = 0; i < lessonIds.length; i++) {
+      tx.update(lessons)
+        .set({ position: i + 1 })
+        .where(
+          and(eq(lessons.id, lessonIds[i]), eq(lessons.moduleId, moduleId))
+        )
+        .run();
+    }
+  });
   return getLessonsByModule(moduleId);
 }
 
@@ -255,33 +264,35 @@ export function moveLessonToModule(
 
   const sourceModuleId = lesson.moduleId;
 
-  // 1. Close the gap in the source module
-  db.update(lessons)
-    .set({ position: sql`${lessons.position} - 1` })
-    .where(
-      and(
-        eq(lessons.moduleId, sourceModuleId),
-        gt(lessons.position, lesson.position)
+  return db.transaction((tx) => {
+    // 1. Close the gap in the source module
+    tx.update(lessons)
+      .set({ position: sql`${lessons.position} - 1` })
+      .where(
+        and(
+          eq(lessons.moduleId, sourceModuleId),
+          gt(lessons.position, lesson.position)
+        )
       )
-    )
-    .run();
+      .run();
 
-  // 2. Open a gap in the destination module
-  db.update(lessons)
-    .set({ position: sql`${lessons.position} + 1` })
-    .where(
-      and(
-        eq(lessons.moduleId, targetModuleId),
-        gte(lessons.position, targetPosition)
+    // 2. Open a gap in the destination module
+    tx.update(lessons)
+      .set({ position: sql`${lessons.position} + 1` })
+      .where(
+        and(
+          eq(lessons.moduleId, targetModuleId),
+          gte(lessons.position, targetPosition)
+        )
       )
-    )
-    .run();
+      .run();
 
-  // 3. Move the lesson to the target module at the target position
-  return db
-    .update(lessons)
-    .set({ moduleId: targetModuleId, position: targetPosition })
-    .where(eq(lessons.id, lessonId))
-    .returning()
-    .get();
+    // 3. Move the lesson to the target module at the target position
+    return tx
+      .update(lessons)
+      .set({ moduleId: targetModuleId, position: targetPosition })
+      .where(eq(lessons.id, lessonId))
+      .returning()
+      .get();
+  });
 }
